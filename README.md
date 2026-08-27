@@ -168,7 +168,9 @@ Build the production web bundle:
 npm run web:export
 ```
 
-Deploy the contents of `dist/` to a static host with HTTPS enabled and SPA fallback to `index.html`. For example, with Vercel, Netlify, GitHub Pages, or another static host, configure the site’s production domain and point its output directory at `dist`. Do not use an HTTP-only URL: service workers and iPhone installation require a secure origin. `localhost` is secure for development, but it is not a public URL that an iPhone can reach.
+Deploy the contents of `dist/` to a static host with HTTPS enabled and SPA fallback to `index.html`. Vercel reads the repository’s `vercel.json`, which sets the export command, `dist` output directory, SPA fallback, and PWA response headers. Do not use an HTTP-only URL: service workers and iPhone installation require a secure origin. `localhost` is secure for development, but it is not a public URL that an iPhone can reach.
+
+For a public Vercel PWA, disable **Deployment Protection** for the production deployment, or configure an equivalent public access rule. A protected preview URL redirects `/manifest.json` to `vercel.com/sso-api`; browsers then report that redirect as a CORS error and Safari cannot install the PWA. Use the production `.vercel.app` URL or a custom domain after protection is removed.
 
 Before publishing, confirm these URLs return `200` from the deployed domain:
 
