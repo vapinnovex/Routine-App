@@ -10,7 +10,6 @@ import { AppText } from "@/components/ui/Text";
 import { spacing } from "@/constants/theme";
 import { clearAllLocalData, exportLocalData } from "@/services/exportData";
 import { requestNotificationPermission } from "@/services/notifications";
-import { buildSampleSessions, buildSampleTasks } from "@/services/sampleData";
 import { useTaskStore } from "@/store/taskStore";
 import { useTimerStore } from "@/store/timerStore";
 import { useToastStore } from "@/store/toastStore";
@@ -25,11 +24,22 @@ export function SettingsScreen() {
   const user = useUserStore((state) => state.user);
   const updateName = useUserStore((state) => state.updateName);
   const updatePreferences = useUserStore((state) => state.updatePreferences);
-  const markSample = useUserStore((state) => state.markSampleInstalled);
+  const tasks = useTaskStore((state) => state.tasks);
+  const occurrences = useTaskStore((state) => state.occurrences);
+  const sessions = useTimerStore((state) => state.sessions);
+  const taskChanges = useTaskStore((state) => state.hasUserChanges);
+  const sessionChanges = useTimerStore((state) => state.hasUserChanges);
   const [name, setName] = useState(user?.name ?? "");
   const [savedName, setSavedName] = useState(user?.name ?? "");
   const [confirmClear, setConfirmClear] = useState(false);
   const preferences = user?.preferences;
+  const hasChangedData =
+    Object.keys(occurrences).length > 0 ||
+    taskChanges ||
+    sessionChanges ||
+    (user?.sampleDataInstalled
+      ? tasks.length !== 7 || sessions.length !== 6
+      : tasks.length > 0 || sessions.length > 0);
 
   useEffect(() => {
     const nextName = user?.name ?? "";
@@ -151,27 +161,6 @@ export function SettingsScreen() {
           Data
         </AppText>
         <Button
-          label={
-            user?.sampleDataInstalled
-              ? "Reload sample data"
-              : "Load sample data"
-          }
-          variant="secondary"
-          onPress={() => {
-            useTaskStore.setState({
-              tasks: [...buildSampleTasks(), ...useTaskStore.getState().tasks],
-            });
-            useTimerStore.setState({
-              sessions: [
-                ...buildSampleSessions(),
-                ...useTimerStore.getState().sessions,
-              ],
-            });
-            markSample(true);
-            useToastStore.getState().show("Sample data added");
-          }}
-        />
-        <Button
           label="Export data"
           variant="secondary"
           onPress={async () => {
@@ -182,6 +171,7 @@ export function SettingsScreen() {
         <Button
           label="Clear local data"
           variant="danger"
+          disabled={!hasChangedData}
           onPress={() => setConfirmClear(true)}
         />
       </Card>

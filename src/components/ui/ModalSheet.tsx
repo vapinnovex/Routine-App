@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import {
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    StyleSheet,
-    View,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -46,6 +46,8 @@ export function BottomSheet({
             {
               backgroundColor: colors.background,
               paddingBottom: Math.max(insets.bottom, spacing.lg),
+              marginBottom: spacing.xl,
+              maxHeight: "76%",
             },
           ]}
         >

@@ -25,6 +25,7 @@ interface TaskInput {
 
 interface TaskState {
   hydrated: boolean;
+  hasUserChanges: boolean;
   tasks: Task[];
   occurrences: Record<string, TaskOccurrence>;
   error: string | null;
@@ -57,6 +58,7 @@ export const useTaskStore = create<TaskState>()(
   persist(
     (set, get) => ({
       hydrated: false,
+      hasUserChanges: false,
       tasks: [],
       occurrences: {},
       error: null,
@@ -83,7 +85,7 @@ export const useTaskStore = create<TaskState>()(
               completedAt: null,
             })),
         };
-        set({ tasks: [task, ...get().tasks] });
+        set({ tasks: [task, ...get().tasks], hasUserChanges: true });
         return task;
       },
       updateTask: (id, input) => {
@@ -117,6 +119,7 @@ export const useTaskStore = create<TaskState>()(
               updatedAt: new Date().toISOString(),
             };
           }),
+          hasUserChanges: true,
         });
       },
       deleteTask: (id) => {
@@ -127,6 +130,7 @@ export const useTaskStore = create<TaskState>()(
         set({
           tasks: get().tasks.filter((task) => task.id !== id),
           occurrences,
+          hasUserChanges: true,
         });
       },
       moveTask: (id, direction) => {
@@ -137,7 +141,7 @@ export const useTaskStore = create<TaskState>()(
             return state;
           const tasks = [...state.tasks];
           [tasks[index], tasks[target]] = [tasks[target], tasks[index]];
-          return { tasks };
+          return { tasks, hasUserChanges: true };
         });
       },
       reorderTasks: (ids) => {
@@ -149,7 +153,7 @@ export const useTaskStore = create<TaskState>()(
           const remaining = state.tasks.filter(
             (task) => !ids.includes(task.id),
           );
-          return { tasks: [...ordered, ...remaining] };
+          return { tasks: [...ordered, ...remaining], hasUserChanges: true };
         });
       },
       toggleTaskComplete: (taskId, date) => {
@@ -165,7 +169,10 @@ export const useTaskStore = create<TaskState>()(
           !resolved.isComplete,
           new Date().toISOString(),
         );
-        set({ occurrences: upsertOccurrence(get().occurrences, next) });
+        set({
+          occurrences: upsertOccurrence(get().occurrences, next),
+          hasUserChanges: true,
+        });
       },
       toggleSubtask: (taskId, date, subtaskId) => {
         if (date > todayKey()) return;
@@ -183,7 +190,10 @@ export const useTaskStore = create<TaskState>()(
           !subtask.completed,
           new Date().toISOString(),
         );
-        set({ occurrences: upsertOccurrence(get().occurrences, next) });
+        set({
+          occurrences: upsertOccurrence(get().occurrences, next),
+          hasUserChanges: true,
+        });
       },
       addSubtask: (taskId, title) => {
         const trimmed = title.trim();
@@ -206,6 +216,7 @@ export const useTaskStore = create<TaskState>()(
                 }
               : task,
           ),
+          hasUserChanges: true,
         });
       },
       updateSubtask: (taskId, subtaskId, title) => {
@@ -225,6 +236,7 @@ export const useTaskStore = create<TaskState>()(
                 }
               : task,
           ),
+          hasUserChanges: true,
         });
       },
       deleteSubtask: (taskId, subtaskId) => {
@@ -240,19 +252,28 @@ export const useTaskStore = create<TaskState>()(
                 }
               : task,
           ),
+          hasUserChanges: true,
         });
       },
       installSampleTasks: () => {
-        set({ tasks: [...buildSampleTasks(), ...get().tasks] });
+        set({
+          tasks: [...buildSampleTasks(), ...get().tasks],
+          hasUserChanges: false,
+        });
       },
-      clearTasks: () => set({ tasks: [], occurrences: {} }),
+      clearTasks: () =>
+        set({ tasks: [], occurrences: {}, hasUserChanges: false }),
     }),
     {
       name: "routine-tasks",
-      storage: createPersistStorage<Pick<TaskState, "tasks" | "occurrences">>(),
+      storage:
+        createPersistStorage<
+          Pick<TaskState, "tasks" | "occurrences" | "hasUserChanges">
+        >(),
       partialize: (state) => ({
         tasks: state.tasks,
         occurrences: state.occurrences,
+        hasUserChanges: state.hasUserChanges,
       }),
       onRehydrateStorage: () => () => {
         useTaskStore.setState({ hydrated: true });

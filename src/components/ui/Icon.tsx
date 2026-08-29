@@ -22,7 +22,8 @@ export type IconName =
   | "copy"
   | "grip"
   | "flame"
-  | "sun";
+  | "sun"
+  | "shuffle";
 
 interface IconProps {
   name: IconName;
@@ -99,6 +100,27 @@ export function Icon({ name, color, size = 22 }: IconProps) {
             strokeWidth={1.8}
             strokeLinecap="round"
           />
+        </Svg>
+      );
+    case "shuffle":
+      return (
+        <Svg width={size} height={size} viewBox="0 0 48 48" fill="none">
+          <Path
+            d="M16.5 13.5C12.5 13.5 9.5 16.5 9.5 20.5C9.5 24.5 12.5 27.5 16.5 27.5H18.5"
+            stroke={stroke}
+            strokeWidth={5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <Path
+            d="M14.5 9.5L19.5 13.5L14.5 17.5"
+            stroke={stroke}
+            strokeWidth={5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <Rect x="25" y="11" width="20" height="7" rx="3.5" fill={stroke} />
+          <Rect x="25" y="23" width="20" height="7" rx="3.5" fill={stroke} />
         </Svg>
       );
     case "play":
@@ -184,12 +206,14 @@ export function Icon({ name, color, size = 22 }: IconProps) {
     case "settings":
       return (
         <Svg {...props}>
-          <Circle cx="12" cy="12" r="3" stroke={stroke} strokeWidth={1.8} />
           <Path
-            d="M19.4 15a7.8 7.8 0 0 0 .1-6l-2.1.4a5.9 5.9 0 0 0-1.3-1.3l.4-2.1a7.8 7.8 0 0 0-6-.1l-.4 2.1A5.9 5.9 0 0 0 8.6 9L6.5 8.6a7.8 7.8 0 0 0 .1 6l2.1-.4a5.9 5.9 0 0 0 1.3 1.3l-.4 2.1a7.8 7.8 0 0 0 6 .1l.4-2.1a5.9 5.9 0 0 0 1.3-1.3l2.1.4Z"
+            d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
             stroke={stroke}
-            strokeWidth={1.4}
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
           />
+          <Circle cx="12" cy="12" r="3" stroke={stroke} strokeWidth={2} />
         </Svg>
       );
     case "calendar":

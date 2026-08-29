@@ -30,7 +30,6 @@ export function TasksScreen() {
   const occurrences = useTaskStore((state) => state.occurrences);
   const toggle = useTaskStore((state) => state.toggleTaskComplete);
   const toggleSubtask = useTaskStore((state) => state.toggleSubtask);
-  const moveTask = useTaskStore((state) => state.moveTask);
   const [tab, setTab] = useState<Tab>("today");
   const today = todayKey();
   const now = new Date();
@@ -66,6 +65,15 @@ export function TasksScreen() {
         .slice(0, 24),
     [occurrences, tasks, today],
   );
+  const upcomingGroups = useMemo(() => {
+    const groups = new Map<string, (typeof upcoming)[number][]>();
+    for (const entry of upcoming) {
+      const group = groups.get(entry.date) ?? [];
+      group.push(entry);
+      groups.set(entry.date, group);
+    }
+    return [...groups.entries()];
+  }, [upcoming]);
   const completed = useMemo(
     () =>
       Object.values(occurrences)
@@ -82,9 +90,23 @@ export function TasksScreen() {
             : null;
         })
         .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
-        .sort((a, b) => b.date.localeCompare(a.date)),
+        .filter((entry) => !entry.item.task.archived)
+        .sort(
+          (a, b) =>
+            b.date.localeCompare(a.date) ||
+            a.item.task.title.localeCompare(b.item.task.title),
+        ),
     [occurrences, tasks],
   );
+  const completedGroups = useMemo(() => {
+    const groups = new Map<string, (typeof completed)[number][]>();
+    for (const entry of completed) {
+      const group = groups.get(entry.date) ?? [];
+      group.push(entry);
+      groups.set(entry.date, group);
+    }
+    return [...groups.entries()];
+  }, [completed]);
   const onToggle = (taskId: string, date: string) => {
     toggle(taskId, date);
     void successHaptic(preferences);
@@ -97,7 +119,6 @@ export function TasksScreen() {
     <Card key={`${item.task.id}-${date}`} style={{ marginBottom: spacing.xs }}>
       <TaskRow
         item={item}
-        onLongPress={() => moveTask(item.task.id, index === 0 ? 1 : -1)}
         onToggle={() => onToggle(item.task.id, date)}
         onPress={() =>
           router.push({
@@ -152,12 +173,12 @@ export function TasksScreen() {
       {tab === "upcoming" ? (
         upcoming.length ? (
           <View style={{ marginTop: spacing.md }}>
-            {upcoming.map(({ date, item }, index) => (
-              <View key={`${item.task.id}-${date}`}>
+            {upcomingGroups.map(([date, entries]) => (
+              <View key={date}>
                 <AppText variant="caption" muted>
                   {formatShortDate(date)}
                 </AppText>
-                {row(item, date, index)}
+                {entries.map(({ item }, index) => row(item, date, index))}
               </View>
             ))}
           </View>
@@ -171,12 +192,12 @@ export function TasksScreen() {
       {tab === "done" ? (
         completed.length ? (
           <View style={{ marginTop: spacing.md }}>
-            {completed.map(({ date, item }, index) => (
-              <View key={`${item.task.id}-${date}`}>
+            {completedGroups.map(([date, entries]) => (
+              <View key={date}>
                 <AppText variant="caption" muted>
                   {formatShortDate(date)}
                 </AppText>
-                {row(item, date, index)}
+                {entries.map(({ item }, index) => row(item, date, index))}
               </View>
             ))}
           </View>

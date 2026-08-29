@@ -220,6 +220,7 @@ export function ActiveTimerScreen() {
           onPress={previous}
           icon="previous"
           disabled={active.currentIndex === 0}
+          colors={colors}
         />
         <Pressable
           onPress={active.status === "paused" ? resume : pause}
@@ -228,7 +229,7 @@ export function ActiveTimerScreen() {
         >
           <Icon
             name={active.status === "paused" ? "play" : "pause"}
-            color="#161311"
+            color={colors.textInverse}
             size={28}
           />
         </Pressable>
@@ -237,6 +238,7 @@ export function ActiveTimerScreen() {
           onPress={skip}
           icon="skip"
           disabled={active.currentIndex >= active.sections.length - 1}
+          colors={colors}
         />
       </View>
       <View style={styles.secondary}>
@@ -245,8 +247,8 @@ export function ActiveTimerScreen() {
           accessibilityLabel="Restart session"
           style={styles.secondaryButton}
         >
-          <Icon name="restart" color={timerImmersive.muted} size={18} />
-          <AppText color={timerImmersive.muted}>Restart</AppText>
+          <Icon name="restart" color={colors.textSecondary} size={18} />
+          <AppText color={colors.textSecondary}>Restart</AppText>
         </Pressable>
         <Pressable
           onPress={() => {
@@ -256,8 +258,8 @@ export function ActiveTimerScreen() {
           accessibilityLabel="End session"
           style={[styles.secondaryButton, styles.endButton]}
         >
-          <Icon name="close" color={timerImmersive.muted} size={18} />
-          <AppText color={timerImmersive.muted}>End session</AppText>
+          <Icon name="close" color={colors.danger} size={18} />
+          <AppText color={colors.danger}>End session</AppText>
         </Pressable>
       </View>
     </View>
@@ -269,11 +271,13 @@ function Control({
   onPress,
   icon,
   disabled = false,
+  colors,
 }: {
   label: string;
   onPress: () => void;
   icon: "skip" | "previous";
   disabled?: boolean;
+  colors: ReturnType<typeof useAppTheme>["colors"];
 }) {
   return (
     <Pressable
@@ -282,8 +286,8 @@ function Control({
       accessibilityLabel={label}
       style={[styles.side, { opacity: disabled ? 0.3 : 1 }]}
     >
-      <Icon name={icon} color={timerImmersive.text} />
-      <AppText variant="caption" color={timerImmersive.muted}>
+      <Icon name={icon} color={colors.textPrimary} />
+      <AppText variant="caption" color={colors.textSecondary}>
         {label}
       </AppText>
     </Pressable>
@@ -322,10 +326,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     borderWidth: 1,
-    borderColor: "rgba(247, 241, 234, 0.2)",
+    borderColor: "rgba(28, 25, 23, 0.18)",
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  endButton: { borderColor: "rgba(224, 106, 100, 0.45)" },
+  endButton: { borderColor: "rgba(194, 65, 59, 0.45)" },
 });

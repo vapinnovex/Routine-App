@@ -1,10 +1,22 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Switch, TextInput, View } from "react-native";
+import {
+    Platform,
+    Pressable,
+    StyleSheet,
+    Switch,
+    TextInput,
+    View,
+} from "react-native";
+import DraggableFlatList, {
+    ScaleDecorator,
+    type RenderItemParams,
+} from "react-native-draggable-flatlist";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Icon } from "@/components/ui/Icon";
 import { Screen } from "@/components/ui/Screen";
 import { AppText } from "@/components/ui/Text";
 import { spacing } from "@/constants/theme";
@@ -35,7 +47,7 @@ const WEEKDAYS = [
 ];
 
 export function TaskEditorScreen() {
-  const { colors } = useAppTheme();
+  const { colors, scheme } = useAppTheme();
   const params = useLocalSearchParams<{ id?: string; date?: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const existing = useTaskStore((state) =>
@@ -62,7 +74,7 @@ export function TaskEditorScreen() {
     existing?.recurrence.weekdays ?? [1, 3, 5],
   );
   const [interval, setInterval] = useState(
-    String(existing?.recurrence.interval ?? 2),
+    String(existing?.recurrence.interval ?? 1),
   );
   const [subtasks, setSubtasks] = useState(
     existing?.subtasks.map((item) => item.title).join("\n") ?? "",
@@ -70,6 +82,7 @@ export function TaskEditorScreen() {
   const [newSubtask, setNewSubtask] = useState("");
   const [showDate, setShowDate] = useState(false);
   const [showTime, setShowTime] = useState(false);
+  const [reorderingSubtasks, setReorderingSubtasks] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const recurrence = useMemo<RecurrenceRule>(() => {
@@ -182,30 +195,60 @@ export function TaskEditorScreen() {
           <AppText variant="caption" muted>
             Date
           </AppText>
-          <AppText>{date}</AppText>
+          {Platform.OS === "web" ? (
+            <TextInput
+              value={date}
+              onChangeText={setDate}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={colors.textSecondary}
+              style={[styles.inlineInput, { color: colors.textPrimary }]}
+            />
+          ) : (
+            <AppText>{date}</AppText>
+          )}
         </Pressable>
-        {showDate ? (
+        {showDate && Platform.OS !== "web" ? (
           <DateTimePicker
             value={parseDateKey(date)}
             mode="date"
+            display={Platform.OS === "ios" ? "spinner" : "default"}
+            themeVariant={scheme}
+            textColor={colors.textPrimary}
             onChange={(_, selected) => {
-              setShowDate(false);
+              if (Platform.OS !== "ios") setShowDate(false);
               if (selected) setDate(toDateKey(selected));
             }}
           />
         ) : null}
         <View style={styles.switchRow}>
           <AppText>Time</AppText>
-          <Switch value={hasTime} onValueChange={setHasTime} />
+          <Switch
+            value={hasTime}
+            onValueChange={(value) => {
+              setHasTime(value);
+              if (value) setShowTime(true);
+            }}
+          />
         </View>
         {hasTime ? (
           <Pressable onPress={() => setShowTime(true)}>
-            <AppText>{time}</AppText>
+            {Platform.OS === "web" ? (
+              <TextInput
+                value={time}
+                onChangeText={setTime}
+                placeholder="HH:MM"
+                placeholderTextColor={colors.textSecondary}
+                keyboardType="numbers-and-punctuation"
+                style={[styles.inlineInput, { color: colors.textPrimary }]}
+              />
+            ) : (
+              <AppText>{time}</AppText>
+            )}
           </Pressable>
         ) : (
           <AppText muted>Optional</AppText>
         )}
-        {showTime ? (
+        {showTime && Platform.OS !== "web" ? (
           <DateTimePicker
             value={(() => {
               const value = parseDateKey(date);
@@ -214,8 +257,10 @@ export function TaskEditorScreen() {
               return value;
             })()}
             mode="time"
+            themeVariant={scheme}
+            textColor={colors.textPrimary}
             onChange={(_, selected) => {
-              setShowTime(false);
+              if (Platform.OS !== "ios") setShowTime(false);
               if (selected) {
                 setTime(
                   `${String(selected.getHours()).padStart(2, "0")}:${String(selected.getMinutes()).padStart(2, "0")}`,
@@ -235,7 +280,10 @@ export function TaskEditorScreen() {
           return (
             <Pressable
               key={option.value}
-              onPress={() => setFrequency(option.value)}
+              onPress={() => {
+                setFrequency(option.value);
+                if (option.value === "daily") setInterval("1");
+              }}
               style={[
                 styles.chip,
                 {
@@ -313,26 +361,66 @@ export function TaskEditorScreen() {
           { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
         ]}
       >
-        <AppText variant="caption" muted>
-          Add the small steps that make this task complete.
-        </AppText>
-        {subtasks
-          .split("\n")
-          .filter(Boolean)
-          .map((item, index) => (
-            <View
-              key={`${item}-${index}`}
-              style={[styles.subtaskItem, { backgroundColor: colors.surface }]}
+        <View style={styles.subtaskHeader}>
+          <AppText variant="caption" muted>
+            Add the small steps that make this task complete.
+          </AppText>
+          {subtasks.split("\n").filter(Boolean).length > 1 ? (
+            <Pressable
+              onPress={() => setReorderingSubtasks((value) => !value)}
+              accessibilityLabel={
+                reorderingSubtasks
+                  ? "Finish reordering subtasks"
+                  : "Reorder subtasks"
+              }
+              hitSlop={8}
             >
-              <AppText style={{ flex: 1 }}>{item}</AppText>
+              <Icon
+                name={reorderingSubtasks ? "check" : "shuffle"}
+                color={colors.secondary}
+                size={20}
+              />
+            </Pressable>
+          ) : null}
+        </View>
+        <DraggableFlatList
+          data={subtasks.split("\n").filter(Boolean)}
+          keyExtractor={(item, index) => `${item}-${index}`}
+          scrollEnabled={false}
+          renderItem={({
+            item,
+            getIndex,
+            drag,
+            isActive,
+          }: RenderItemParams<string>) => (
+            <ScaleDecorator>
               <Pressable
-                onPress={() => removeSubtask(index)}
-                accessibilityLabel={`Remove ${item}`}
+                onLongPress={reorderingSubtasks ? drag : undefined}
+                style={[
+                  styles.subtaskItem,
+                  {
+                    backgroundColor: colors.surface,
+                    opacity: isActive ? 0.7 : 1,
+                    marginBottom: spacing.xs,
+                  },
+                ]}
+                accessibilityLabel={`Hold to move ${item}`}
               >
-                <AppText color={colors.danger}>Remove</AppText>
+                {reorderingSubtasks ? (
+                  <Icon name="grip" color={colors.textSecondary} size={18} />
+                ) : null}
+                <AppText style={{ flex: 1 }}>{item}</AppText>
+                <Pressable
+                  onPress={() => removeSubtask(getIndex() ?? 0)}
+                  accessibilityLabel={`Remove ${item}`}
+                >
+                  <AppText color={colors.danger}>Remove</AppText>
+                </Pressable>
               </Pressable>
-            </View>
-          ))}
+            </ScaleDecorator>
+          )}
+          onDragEnd={({ data }) => setSubtasks(data.join("\n"))}
+        />
         <View style={styles.subtaskInputRow}>
           <TextInput
             value={newSubtask}
@@ -377,8 +465,18 @@ const styles = StyleSheet.create({
     minHeight: 52,
     marginTop: 6,
   },
+  inlineInput: {
+    minHeight: 36,
+    paddingVertical: 4,
+    fontSize: 16,
+  },
   area: { minHeight: 120, textAlignVertical: "top" },
   subtaskCard: { borderWidth: 1, gap: spacing.sm },
+  subtaskHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   subtaskItem: {
     flexDirection: "row",
     alignItems: "center",

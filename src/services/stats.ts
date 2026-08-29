@@ -1,7 +1,12 @@
-import type { Task, TaskOccurrence } from '@/types/models';
-import { resolveForDate } from '@/services/occurrences';
-import { eachDateKey, parseDateKey, todayKey, weekdayLabel } from '@/utils/dates';
-import { percent } from '@/utils/format';
+import { resolveForDate } from "@/services/occurrences";
+import type { Task, TaskOccurrence } from "@/types/models";
+import {
+    eachDateKey,
+    parseDateKey,
+    todayKey,
+    weekdayLabel,
+} from "@/utils/dates";
+import { percent } from "@/utils/format";
 
 export interface DayProgress {
   date: string;
@@ -33,7 +38,12 @@ export interface TaskStatistics {
   mostProductiveDay: string | null;
   mostCompletedCategory: string | null;
   missedTasks: number;
-  categoryRates: Array<{ category: string; completed: number; total: number; rate: number }>;
+  categoryRates: Array<{
+    category: string;
+    completed: number;
+    total: number;
+    rate: number;
+  }>;
 }
 
 function dayProgress(
@@ -43,10 +53,18 @@ function dayProgress(
 ): DayProgress {
   const resolved = resolveForDate(tasks, occurrences, date);
   const total = resolved.length;
-  const completed = resolved.filter((item) => item.isComplete).length;
+  const scheduledCompleted = resolved.filter((item) => item.isComplete).length;
+  const historicalCompleted = Object.values(occurrences).filter(
+    (occurrence) =>
+      occurrence.date === date &&
+      (occurrence.status === "completed" ||
+        occurrence.parentManuallyCompleted) &&
+      tasks.some((task) => task.id === occurrence.taskId),
+  ).length;
+  const completed = Math.max(scheduledCompleted, historicalCompleted);
   return {
     date,
-    total,
+    total: Math.max(total, completed),
     completed,
     rate: total === 0 ? null : completed / total,
   };
@@ -58,10 +76,12 @@ export function monthStats(
   year: number,
   monthIndex: number,
 ): MonthlyStats {
-  const start = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+  const start = `${year}-${String(monthIndex + 1).padStart(2, "0")}-01`;
   const lastDate = new Date(year, monthIndex + 1, 0).getDate();
-  const end = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(lastDate).padStart(2, '0')}`;
-  const days = eachDateKey(start, end).map((date) => dayProgress(tasks, occurrences, date));
+  const end = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(lastDate).padStart(2, "0")}`;
+  const days = eachDateKey(start, end).map((date) =>
+    dayProgress(tasks, occurrences, date),
+  );
   const countable = days.filter((day) => day.total > 0);
   const tasksTotal = countable.reduce((sum, day) => sum + day.total, 0);
   const tasksCompleted = countable.reduce((sum, day) => sum + day.completed, 0);
@@ -70,7 +90,12 @@ export function monthStats(
   let bestDay: DayProgress | null = null;
   let worstDay: DayProgress | null = null;
   for (const day of countable) {
-    if (!bestDay || (day.rate ?? 0) > (bestDay.rate ?? 0) || ((day.rate ?? 0) === (bestDay.rate ?? 0) && day.completed > bestDay.completed)) {
+    if (
+      !bestDay ||
+      day.completed > bestDay.completed ||
+      (day.completed === bestDay.completed &&
+        (day.rate ?? 0) > (bestDay.rate ?? 0))
+    ) {
       bestDay = day;
     }
     if (!worstDay || (day.rate ?? 1) < (worstDay.rate ?? 1)) {
@@ -80,8 +105,8 @@ export function monthStats(
 
   return {
     monthLabel: new Date(year, monthIndex, 1).toLocaleDateString(undefined, {
-      month: 'long',
-      year: 'numeric',
+      month: "long",
+      year: "numeric",
     }),
     year,
     monthIndex,
@@ -96,7 +121,10 @@ export function monthStats(
   };
 }
 
-function streakFromDays(days: DayProgress[], fromEnd: boolean): { current: number; best: number } {
+function streakFromDays(
+  days: DayProgress[],
+  fromEnd: boolean,
+): { current: number; best: number } {
   let best = 0;
   let run = 0;
   const sequence = fromEnd ? [...days].reverse() : days;
@@ -125,7 +153,10 @@ export function currentStreak(
   throughDate = todayKey(),
 ): number {
   if (tasks.length === 0) return 0;
-  const earliest = tasks.reduce((min, task) => (task.date < min ? task.date : min), tasks[0].date);
+  const earliest = tasks.reduce(
+    (min, task) => (task.date < min ? task.date : min),
+    tasks[0].date,
+  );
   const days = eachDateKey(earliest, throughDate).map((date) =>
     dayProgress(tasks, occurrences, date),
   );
@@ -138,7 +169,10 @@ export function bestStreak(
   throughDate = todayKey(),
 ): number {
   if (tasks.length === 0) return 0;
-  const earliest = tasks.reduce((min, task) => (task.date < min ? task.date : min), tasks[0].date);
+  const earliest = tasks.reduce(
+    (min, task) => (task.date < min ? task.date : min),
+    tasks[0].date,
+  );
   const days = eachDateKey(earliest, throughDate).map((date) =>
     dayProgress(tasks, occurrences, date),
   );
@@ -164,12 +198,18 @@ export function computeStatistics(
     };
   }
 
-  const earliest = tasks.reduce((min, task) => (task.date < min ? task.date : min), tasks[0].date);
+  const earliest = tasks.reduce(
+    (min, task) => (task.date < min ? task.date : min),
+    tasks[0].date,
+  );
   const dates = eachDateKey(earliest, throughDate);
   let total = 0;
   let completed = 0;
   let missed = 0;
-  const weekdayTotals = Array.from({ length: 7 }, () => ({ completed: 0, total: 0 }));
+  const weekdayTotals = Array.from({ length: 7 }, () => ({
+    completed: 0,
+    total: 0,
+  }));
   const categoryMap = new Map<string, { completed: number; total: number }>();
 
   for (const date of dates) {
@@ -179,7 +219,7 @@ export function computeStatistics(
     for (const item of resolved) {
       total += 1;
       weekdayTotals[weekday].total += 1;
-      const category = item.task.category ?? 'Other';
+      const category = item.task.category ?? "Other";
       const bucket = categoryMap.get(category) ?? { completed: 0, total: 0 };
       bucket.total += 1;
       if (item.isComplete) {
@@ -199,7 +239,10 @@ export function computeStatistics(
   weekdayTotals.forEach((value, day) => {
     if (value.total === 0) return;
     const rate = value.completed / value.total;
-    if (rate > bestRate || (rate === bestRate && value.completed > bestCompleted)) {
+    if (
+      rate > bestRate ||
+      (rate === bestRate && value.completed > bestCompleted)
+    ) {
       bestDayIndex = day;
       bestRate = rate;
       bestCompleted = value.completed;
@@ -221,7 +264,8 @@ export function computeStatistics(
     completionPercentage: percent(completed, total),
     currentStreak: currentStreak(tasks, occurrences, throughDate),
     bestStreak: bestStreak(tasks, occurrences, throughDate),
-    mostProductiveDay: bestDayIndex === null ? null : weekdayLabel(bestDayIndex, true),
+    mostProductiveDay:
+      bestDayIndex === null ? null : weekdayLabel(bestDayIndex, true),
     mostCompletedCategory: categoryRates[0]?.category ?? null,
     missedTasks: missed,
     categoryRates,

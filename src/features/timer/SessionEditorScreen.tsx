@@ -1,10 +1,15 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
+import DraggableFlatList, {
+    ScaleDecorator,
+    type RenderItemParams,
+} from "react-native-draggable-flatlist";
 
 import { SectionRow } from "@/components/timer/SectionRow";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Icon } from "@/components/ui/Icon";
 import { BottomSheet } from "@/components/ui/ModalSheet";
 import { Screen } from "@/components/ui/Screen";
 import { AppText } from "@/components/ui/Text";
@@ -53,16 +58,15 @@ export function SessionEditorScreen() {
   );
   const [editing, setEditing] = useState<TimerSection | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const moveSection = (index: number) => {
-    setSections((current) => {
-      const target = index === 0 ? 1 : index - 1;
-      if (target >= current.length) return current;
-      const next = [...current];
-      [next[index], next[target]] = [next[target], next[index]];
-      return next.map((section, order) => ({ ...section, order }));
-    });
-  };
+  const [reorderingSections, setReorderingSections] = useState(false);
+  const baseline = JSON.stringify({
+    name: existing?.name ?? "",
+    category: existing?.category ?? null,
+    sections:
+      existing?.sections.slice().sort((a, b) => a.order - b.order) ?? [],
+  });
+  const dirty =
+    !existing || JSON.stringify({ name, category, sections }) !== baseline;
 
   const save = () => {
     if (!name.trim()) {
@@ -154,22 +158,56 @@ export function SessionEditorScreen() {
       >
         Sections
       </AppText>
-      <View style={{ gap: spacing.sm }}>
-        {sections.map((section, index) => (
-          <SectionRow
-            key={section.id}
-            section={section}
-            index={index}
-            onLongPress={() => moveSection(index)}
-            onEdit={() => setEditing(section)}
-            onDelete={() =>
-              setSections((current) =>
-                current.filter((item) => item.id !== section.id),
-              )
-            }
+      {sections.length > 1 ? (
+        <Pressable
+          onPress={() => setReorderingSections((value) => !value)}
+          accessibilityLabel={
+            reorderingSections
+              ? "Finish reordering sections"
+              : "Reorder sections"
+          }
+          style={styles.shuffle}
+        >
+          <Icon
+            name={reorderingSections ? "check" : "shuffle"}
+            color={colors.secondary}
+            size={20}
           />
-        ))}
-      </View>
+        </Pressable>
+      ) : null}
+      <DraggableFlatList
+        data={sections}
+        keyExtractor={(section) => section.id}
+        scrollEnabled={false}
+        renderItem={({
+          item: section,
+          getIndex,
+          drag,
+          isActive,
+        }: RenderItemParams<TimerSection>) => (
+          <ScaleDecorator>
+            <View
+              style={{ marginBottom: spacing.sm, opacity: isActive ? 0.7 : 1 }}
+            >
+              <SectionRow
+                section={section}
+                index={getIndex() ?? 0}
+                onLongPress={reorderingSections ? drag : undefined}
+                showDragHandle={reorderingSections}
+                onEdit={() => setEditing(section)}
+                onDelete={() =>
+                  setSections((current) =>
+                    current.filter((item) => item.id !== section.id),
+                  )
+                }
+              />
+            </View>
+          </ScaleDecorator>
+        )}
+        onDragEnd={({ data }) =>
+          setSections(data.map((section, order) => ({ ...section, order })))
+        }
+      />
       <Button
         label="Add section"
         variant="secondary"
@@ -184,6 +222,7 @@ export function SessionEditorScreen() {
       <Button
         label="Save session"
         onPress={save}
+        disabled={!dirty}
         style={{ marginTop: spacing.sm }}
       />
 
@@ -227,7 +266,7 @@ function SectionEditor({
   return (
     <BottomSheet visible onClose={onClose} title="Section">
       <TextInput
-        defaultValue={section.title}
+        value={title}
         onChangeText={setTitle}
         placeholder="Push ups"
         placeholderTextColor={colors.textSecondary}
@@ -346,4 +385,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   stepper: { flexDirection: "row", alignItems: "center", gap: 16 },
+  shuffle: {
+    alignSelf: "flex-end",
+    padding: spacing.xs,
+    marginBottom: spacing.xs,
+  },
 });

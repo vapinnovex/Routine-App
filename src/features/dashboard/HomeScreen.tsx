@@ -172,15 +172,6 @@ export function HomeScreen() {
         </Card>
       )}
 
-      <Pressable
-        onPress={() => router.push({ pathname: "/task/edit" })}
-        style={{ paddingVertical: spacing.md }}
-      >
-        <AppText color={colors.secondary}>
-          Need more detail? Open full task form
-        </AppText>
-      </Pressable>
-
       <BottomSheet
         visible={quickOpen}
         title="Quick task"

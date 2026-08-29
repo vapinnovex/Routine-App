@@ -13,13 +13,15 @@ export function SectionRow({
   onLongPress,
   onEdit,
   onDelete,
+  showDragHandle = false,
   isDragging = false,
 }: {
   section: TimerSection;
   index: number;
-  onLongPress: () => void;
+  onLongPress?: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  showDragHandle?: boolean;
   isDragging?: boolean;
 }) {
   const { colors } = useAppTheme();
@@ -38,9 +40,9 @@ export function SectionRow({
         },
       ]}
     >
-      <AppText variant="caption" muted style={styles.order}>
-        Hold
-      </AppText>
+      {showDragHandle ? (
+        <Icon name="grip" color={colors.textSecondary} size={18} />
+      ) : null}
       <Pressable onPress={onEdit} style={{ flex: 1 }}>
         <AppText variant="subheading">
           {index + 1}. {section.title}

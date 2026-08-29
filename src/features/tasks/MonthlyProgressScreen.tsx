@@ -34,6 +34,7 @@ export function MonthlyProgressScreen() {
     [occurrences, tasks],
   );
   const selectedItems = resolveForDate(tasks, occurrences, selectedDate);
+  const hasCompletedActivity = stats.days.some((day) => day.completed > 0);
 
   return (
     <Screen>
@@ -111,16 +112,18 @@ export function MonthlyProgressScreen() {
             </AppText>
             <AppText muted>Best streak {stats.bestStreak} days</AppText>
           </Card>
-          <Card style={{ marginTop: spacing.md }}>
-            <AppText
-              variant="caption"
-              muted
-              style={{ marginBottom: spacing.sm }}
-            >
-              Activity
-            </AppText>
-            <Heatmap days={stats.days} />
-          </Card>
+          {hasCompletedActivity ? (
+            <Card style={{ marginTop: spacing.md }}>
+              <AppText
+                variant="caption"
+                muted
+                style={{ marginBottom: spacing.sm }}
+              >
+                Activity
+              </AppText>
+              <Heatmap days={stats.days} />
+            </Card>
+          ) : null}
         </>
       )}
       <Card style={{ marginTop: spacing.md, gap: spacing.xs }}>

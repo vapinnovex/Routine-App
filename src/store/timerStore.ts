@@ -28,6 +28,7 @@ interface SessionInput {
 
 interface TimerState {
   hydrated: boolean;
+  hasUserChanges: boolean;
   sessions: TimerSession[];
   active: ActiveTimerState | null;
   lastCompleted: ActiveTimerState | null;
@@ -87,6 +88,7 @@ export const useTimerStore = create<TimerState>()(
   persist(
     (set, get) => ({
       hydrated: false,
+      hasUserChanges: false,
       sessions: [],
       active: null,
       lastCompleted: null,
@@ -112,6 +114,7 @@ export const useTimerStore = create<TimerState>()(
               sessions: get().sessions.map((session) =>
                 session.id === id ? updated : session,
               ),
+              hasUserChanges: true,
             });
             return updated;
           }
@@ -128,12 +131,13 @@ export const useTimerStore = create<TimerState>()(
           lastUsedAt: null,
           sections,
         };
-        set({ sessions: [created, ...get().sessions] });
+        set({ sessions: [created, ...get().sessions], hasUserChanges: true });
         return created;
       },
       deleteSession: (id) => {
         set({
           sessions: get().sessions.filter((session) => session.id !== id),
+          hasUserChanges: true,
         });
       },
       moveSession: (id, direction) => {
@@ -149,7 +153,7 @@ export const useTimerStore = create<TimerState>()(
             sessions[target],
             sessions[index],
           ];
-          return { sessions };
+          return { sessions, hasUserChanges: true };
         });
       },
       reorderSessions: (ids) => {
@@ -163,7 +167,7 @@ export const useTimerStore = create<TimerState>()(
           const remaining = state.sessions.filter(
             (session) => !ids.includes(session.id),
           );
-          return { sessions: [...ordered, ...remaining] };
+          return { sessions: [...ordered, ...remaining], hasUserChanges: true };
         });
       },
       duplicateSession: (id) => {
@@ -290,21 +294,33 @@ export const useTimerStore = create<TimerState>()(
       },
       clearLastCompleted: () => set({ lastCompleted: null }),
       installSampleSessions: () => {
-        set({ sessions: [...buildSampleSessions(), ...get().sessions] });
+        set({
+          sessions: [...buildSampleSessions(), ...get().sessions],
+          hasUserChanges: false,
+        });
       },
       clearSessions: () =>
-        set({ sessions: [], active: null, lastCompleted: null }),
+        set({
+          sessions: [],
+          active: null,
+          lastCompleted: null,
+          hasUserChanges: false,
+        }),
     }),
     {
       name: "routine-timer",
       storage:
         createPersistStorage<
-          Pick<TimerState, "sessions" | "active" | "lastCompleted">
+          Pick<
+            TimerState,
+            "sessions" | "active" | "lastCompleted" | "hasUserChanges"
+          >
         >(),
       partialize: (state) => ({
         sessions: state.sessions,
         active: state.active,
         lastCompleted: state.lastCompleted,
+        hasUserChanges: state.hasUserChanges,
       }),
       onRehydrateStorage: () => (state) => {
         useTimerStore.setState({ hydrated: true });
