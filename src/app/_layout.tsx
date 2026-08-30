@@ -9,6 +9,8 @@ import { ToastHost } from "@/components/ui/ToastHost";
 import {
     cancelTimerNotifications,
     configureNotifications,
+    scheduleTaskNotifications,
+    scheduleTimerNotifications,
 } from "@/services/notifications";
 import { useTaskStore } from "@/store/taskStore";
 import { useTimerStore } from "@/store/timerStore";
@@ -45,6 +47,25 @@ function AppEffects() {
 
   useEffect(() => {
     void configureNotifications();
+    const syncTasks = () => {
+      const user = useUserStore.getState().user;
+      const preferences = user?.preferences;
+      void scheduleTimerNotifications(
+        useTimerStore.getState().active,
+        Boolean(
+          preferences?.notificationsEnabled &&
+          preferences?.timerNotificationsEnabled,
+        ),
+      );
+      void scheduleTaskNotifications(
+        useTaskStore.getState().tasks,
+        Boolean(
+          preferences?.notificationsEnabled &&
+          preferences?.taskRemindersEnabled,
+        ),
+      );
+    };
+    syncTasks();
   }, []);
 
   useEffect(() => {

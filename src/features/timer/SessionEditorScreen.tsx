@@ -179,6 +179,7 @@ export function SessionEditorScreen() {
         data={sections}
         keyExtractor={(section) => section.id}
         scrollEnabled={false}
+        style={{ flexGrow: 0 }}
         renderItem={({
           item: section,
           getIndex,

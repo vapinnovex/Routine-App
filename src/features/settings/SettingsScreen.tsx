@@ -9,7 +9,11 @@ import { Screen } from "@/components/ui/Screen";
 import { AppText } from "@/components/ui/Text";
 import { spacing } from "@/constants/theme";
 import { clearAllLocalData, exportLocalData } from "@/services/exportData";
-import { requestNotificationPermission } from "@/services/notifications";
+import {
+    requestNotificationPermission,
+    scheduleTaskNotifications,
+    scheduleTimerNotifications,
+} from "@/services/notifications";
 import { useTaskStore } from "@/store/taskStore";
 import { useTimerStore } from "@/store/timerStore";
 import { useToastStore } from "@/store/toastStore";
@@ -125,21 +129,36 @@ export function SettingsScreen() {
           onChange={async (value) => {
             if (value) await requestNotificationPermission();
             updatePreferences({ notificationsEnabled: value });
+            await syncNotifications(
+              value,
+              preferences.taskRemindersEnabled,
+              preferences.timerNotificationsEnabled,
+            );
           }}
         />
         <Row
           label="Task reminders"
           value={preferences.taskRemindersEnabled}
-          onChange={(value) =>
-            updatePreferences({ taskRemindersEnabled: value })
-          }
+          onChange={async (value) => {
+            updatePreferences({ taskRemindersEnabled: value });
+            await syncNotifications(
+              preferences.notificationsEnabled,
+              value,
+              preferences.timerNotificationsEnabled,
+            );
+          }}
         />
         <Row
           label="Timer notifications"
           value={preferences.timerNotificationsEnabled}
-          onChange={(value) =>
-            updatePreferences({ timerNotificationsEnabled: value })
-          }
+          onChange={async (value) => {
+            updatePreferences({ timerNotificationsEnabled: value });
+            await syncNotifications(
+              preferences.notificationsEnabled,
+              preferences.taskRemindersEnabled,
+              value,
+            );
+          }}
         />
       </Card>
 
@@ -189,6 +208,21 @@ export function SettingsScreen() {
         }}
       />
     </Screen>
+  );
+}
+
+async function syncNotifications(
+  notificationsEnabled: boolean,
+  taskRemindersEnabled: boolean,
+  timerNotificationsEnabled: boolean,
+) {
+  await scheduleTimerNotifications(
+    useTimerStore.getState().active,
+    notificationsEnabled && timerNotificationsEnabled,
+  );
+  await scheduleTaskNotifications(
+    useTaskStore.getState().tasks,
+    notificationsEnabled && taskRemindersEnabled,
   );
 }
 

@@ -1,7 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import { cancelTimerNotifications } from "@/services/notifications";
+import {
+    cancelTimerNotifications,
+    scheduleTaskNotifications,
+    scheduleTimerNotifications,
+} from "@/services/notifications";
 import { createPersistStorage } from "@/services/persistStorage";
 import { buildSampleSessions } from "@/services/sampleData";
 import {
@@ -13,6 +17,8 @@ import {
     skipSection,
     startTimer,
 } from "@/services/timerEngine";
+import { useTaskStore } from "@/store/taskStore";
+import { useUserStore } from "@/store/userStore";
 import type {
     ActiveTimerState,
     TimerSection,
@@ -81,7 +87,20 @@ function toSections(
 }
 
 async function syncNotifications(active: ActiveTimerState | null) {
-  void active;
+  const preferences = useUserStore.getState().user?.preferences;
+  await scheduleTimerNotifications(
+    active,
+    Boolean(
+      preferences?.notificationsEnabled &&
+      preferences.timerNotificationsEnabled,
+    ),
+  );
+  await scheduleTaskNotifications(
+    useTaskStore.getState().tasks,
+    Boolean(
+      preferences?.notificationsEnabled && preferences.taskRemindersEnabled,
+    ),
+  );
 }
 
 export const useTimerStore = create<TimerState>()(

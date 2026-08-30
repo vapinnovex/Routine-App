@@ -15,14 +15,19 @@ export function Screen({
   children,
   scroll = true,
   padded = true,
+  bottomPadding,
   ...rest
-}: ScrollViewProps & { scroll?: boolean; padded?: boolean }) {
+}: ScrollViewProps & {
+  scroll?: boolean;
+  padded?: boolean;
+  bottomPadding?: number;
+}) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const padding = {
     paddingTop: insets.top + spacing.sm,
     paddingHorizontal: padded ? spacing.lg : 0,
-    paddingBottom: insets.bottom + 112,
+    paddingBottom: insets.bottom + (bottomPadding ?? 112),
     backgroundColor: colors.background,
     flexGrow: 1,
   };

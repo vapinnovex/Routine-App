@@ -4,6 +4,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   View,
 } from "react-native";
@@ -53,7 +54,14 @@ export function BottomSheet({
         >
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
           <AppText variant="heading">{title}</AppText>
-          {children}
+          <ScrollView
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
+          >
+            {children}
+          </ScrollView>
         </KeyboardAvoidingView>
       </View>
     </Modal>
@@ -69,6 +77,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.md,
   },
+  content: { gap: spacing.md, paddingBottom: spacing.sm },
   handle: {
     alignSelf: "center",
     width: 42,

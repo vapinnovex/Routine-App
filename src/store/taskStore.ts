@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+import { scheduleTaskNotifications } from "@/services/notifications";
 import {
     applyParentToggle,
     applySubtaskToggle,
@@ -10,6 +11,7 @@ import {
 } from "@/services/occurrences";
 import { createPersistStorage } from "@/services/persistStorage";
 import { buildSampleTasks } from "@/services/sampleData";
+import { useUserStore } from "@/store/userStore";
 import type { RecurrenceRule, Task, TaskOccurrence } from "@/types/models";
 import { todayKey } from "@/utils/dates";
 import { createId, occurrenceId } from "@/utils/id";
@@ -54,6 +56,16 @@ function upsertOccurrence(
   return { ...occurrences, [next.id]: next };
 }
 
+function syncTaskNotifications(tasks: Task[]) {
+  const preferences = useUserStore.getState().user?.preferences;
+  void scheduleTaskNotifications(
+    tasks,
+    Boolean(
+      preferences?.notificationsEnabled && preferences.taskRemindersEnabled,
+    ),
+  );
+}
+
 export const useTaskStore = create<TaskState>()(
   persist(
     (set, get) => ({
@@ -86,52 +98,57 @@ export const useTaskStore = create<TaskState>()(
             })),
         };
         set({ tasks: [task, ...get().tasks], hasUserChanges: true });
+        syncTaskNotifications([task, ...get().tasks]);
         return task;
       },
       updateTask: (id, input) => {
+        const tasks = get().tasks.map((task) => {
+          if (task.id !== id) return task;
+          const subtasks =
+            input.subtasks !== undefined
+              ? input.subtasks
+                  .map((title) => title.trim())
+                  .filter(Boolean)
+                  .map((title, index) => {
+                    const existing = task.subtasks[index];
+                    return {
+                      id: existing?.id ?? createId(),
+                      title,
+                      completed: existing?.completed ?? false,
+                      completedAt: existing?.completedAt ?? null,
+                    };
+                  })
+              : task.subtasks;
+          return {
+            ...task,
+            title: input.title?.trim() ?? task.title,
+            category:
+              input.category === undefined ? task.category : input.category,
+            date: input.date ?? task.date,
+            time: input.time === undefined ? task.time : input.time,
+            recurrence: input.recurrence ?? task.recurrence,
+            subtasks,
+            updatedAt: new Date().toISOString(),
+          };
+        });
         set({
-          tasks: get().tasks.map((task) => {
-            if (task.id !== id) return task;
-            const subtasks =
-              input.subtasks !== undefined
-                ? input.subtasks
-                    .map((title) => title.trim())
-                    .filter(Boolean)
-                    .map((title, index) => {
-                      const existing = task.subtasks[index];
-                      return {
-                        id: existing?.id ?? createId(),
-                        title,
-                        completed: existing?.completed ?? false,
-                        completedAt: existing?.completedAt ?? null,
-                      };
-                    })
-                : task.subtasks;
-            return {
-              ...task,
-              title: input.title?.trim() ?? task.title,
-              category:
-                input.category === undefined ? task.category : input.category,
-              date: input.date ?? task.date,
-              time: input.time === undefined ? task.time : input.time,
-              recurrence: input.recurrence ?? task.recurrence,
-              subtasks,
-              updatedAt: new Date().toISOString(),
-            };
-          }),
+          tasks,
           hasUserChanges: true,
         });
+        syncTaskNotifications(tasks);
       },
       deleteTask: (id) => {
         const occurrences = { ...get().occurrences };
         for (const key of Object.keys(occurrences)) {
           if (occurrences[key].taskId === id) delete occurrences[key];
         }
+        const tasks = get().tasks.filter((task) => task.id !== id);
         set({
-          tasks: get().tasks.filter((task) => task.id !== id),
+          tasks,
           occurrences,
           hasUserChanges: true,
         });
+        syncTaskNotifications(tasks);
       },
       moveTask: (id, direction) => {
         set((state) => {

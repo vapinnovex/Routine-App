@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
 import { TaskRow } from "@/components/tasks/TaskRow";
+import { QuickTimerSheet } from "@/components/timer/QuickTimerSheet";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -33,7 +34,8 @@ export function HomeScreen() {
   const toggle = useTaskStore((state) => state.toggleTaskComplete);
   const toggleSubtask = useTaskStore((state) => state.toggleSubtask);
   const createTask = useTaskStore((state) => state.createTask);
-  const sessions = useTimerStore((state) => state.sessions);
+  const startQuickTimer = useTimerStore((state) => state.startQuickTimer);
+  const [timerOpen, setTimerOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickTitle, setQuickTitle] = useState("");
   const streak = currentStreak(tasks, occurrences);
@@ -115,10 +117,7 @@ export function HomeScreen() {
         <Button
           label="Start Timer"
           variant="secondary"
-          onPress={() => {
-            if (sessions.length === 0) router.push("/session/edit");
-            else router.push("/(tabs)/timer");
-          }}
+          onPress={() => setTimerOpen(true)}
           icon={<Icon name="play" color={colors.textPrimary} size={16} />}
           style={{ flex: 1 }}
         />
@@ -202,6 +201,15 @@ export function HomeScreen() {
           disabled={!quickTitle.trim()}
         />
       </BottomSheet>
+      <QuickTimerSheet
+        visible={timerOpen}
+        onClose={() => setTimerOpen(false)}
+        onStart={(duration) => {
+          startQuickTimer(duration);
+          setTimerOpen(false);
+          router.push("/session/run");
+        }}
+      />
     </Screen>
   );
 }
