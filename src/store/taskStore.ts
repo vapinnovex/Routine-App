@@ -4,6 +4,7 @@ import { persist } from "zustand/middleware";
 import { scheduleTaskNotifications } from "@/services/notifications";
 import {
     applyParentToggle,
+    applySkip,
     applySubtaskToggle,
     emptyOccurrence,
     resolveForDate,
@@ -12,7 +13,12 @@ import {
 import { createPersistStorage } from "@/services/persistStorage";
 import { buildSampleTasks } from "@/services/sampleData";
 import { useUserStore } from "@/store/userStore";
-import type { RecurrenceRule, Task, TaskOccurrence } from "@/types/models";
+import type {
+    RecurrenceRule,
+    Task,
+    TaskOccurrence,
+    TaskPriority,
+} from "@/types/models";
 import { todayKey } from "@/utils/dates";
 import { createId, occurrenceId } from "@/utils/id";
 
@@ -23,6 +29,9 @@ interface TaskInput {
   time: string | null;
   recurrence: RecurrenceRule;
   subtasks: string[];
+  priority?: TaskPriority;
+  estimatedDurationMinutes?: number | null;
+  linkedTimerSessionId?: string | null;
 }
 
 interface TaskState {
@@ -42,6 +51,7 @@ interface TaskState {
   reorderTasks: (ids: string[]) => void;
   toggleTaskComplete: (taskId: string, date: string) => void;
   toggleSubtask: (taskId: string, date: string, subtaskId: string) => void;
+  skipTask: (taskId: string, date: string) => void;
   addSubtask: (taskId: string, title: string) => void;
   updateSubtask: (taskId: string, subtaskId: string, title: string) => void;
   deleteSubtask: (taskId: string, subtaskId: string) => void;
@@ -84,6 +94,9 @@ export const useTaskStore = create<TaskState>()(
           date: input.date,
           time: input.time,
           recurrence: input.recurrence,
+          priority: input.priority ?? "medium",
+          estimatedDurationMinutes: input.estimatedDurationMinutes ?? null,
+          linkedTimerSessionId: input.linkedTimerSessionId ?? null,
           createdAt: now,
           updatedAt: now,
           archived: false,
@@ -127,6 +140,15 @@ export const useTaskStore = create<TaskState>()(
             date: input.date ?? task.date,
             time: input.time === undefined ? task.time : input.time,
             recurrence: input.recurrence ?? task.recurrence,
+            priority: input.priority ?? task.priority ?? "medium",
+            estimatedDurationMinutes:
+              input.estimatedDurationMinutes === undefined
+                ? (task.estimatedDurationMinutes ?? null)
+                : input.estimatedDurationMinutes,
+            linkedTimerSessionId:
+              input.linkedTimerSessionId === undefined
+                ? (task.linkedTimerSessionId ?? null)
+                : input.linkedTimerSessionId,
             subtasks,
             updatedAt: new Date().toISOString(),
           };
@@ -209,6 +231,20 @@ export const useTaskStore = create<TaskState>()(
         );
         set({
           occurrences: upsertOccurrence(get().occurrences, next),
+          hasUserChanges: true,
+        });
+      },
+      skipTask: (taskId, date) => {
+        if (date > todayKey()) return;
+        const task = get().tasks.find((item) => item.id === taskId);
+        if (!task) return;
+        const id = occurrenceId(taskId, date);
+        const current = get().occurrences[id] ?? emptyOccurrence(task, date);
+        set({
+          occurrences: upsertOccurrence(
+            get().occurrences,
+            applySkip(current, new Date().toISOString()),
+          ),
           hasUserChanges: true,
         });
       },

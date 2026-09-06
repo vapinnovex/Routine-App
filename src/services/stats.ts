@@ -1,5 +1,6 @@
 import { resolveForDate } from "@/services/occurrences";
-import type { Task, TaskOccurrence } from "@/types/models";
+import { occursOnDate } from "@/services/recurrence";
+import type { Task, TaskOccurrence, TimerHistoryEntry } from "@/types/models";
 import {
     eachDateKey,
     parseDateKey,
@@ -44,6 +45,166 @@ export interface TaskStatistics {
     total: number;
     rate: number;
   }>;
+}
+
+export interface FocusInsights {
+  totalFocusSeconds: number;
+  focusTodaySeconds: number;
+  focusThisWeekSeconds: number;
+  focusThisMonthSeconds: number;
+  consistencyScore: number;
+  bestFocusHour: number | null;
+  recommendation: string;
+}
+
+export interface TaskStreaks {
+  current: number;
+  best: number;
+  completed: number;
+}
+
+export function taskStreaks(
+  task: Task,
+  occurrences: Record<string, TaskOccurrence>,
+  throughDate = todayKey(),
+): TaskStreaks {
+  const start = task.date > throughDate ? throughDate : task.date;
+  const days = eachDateKey(start, throughDate);
+  let current = 0;
+  let best = 0;
+  let run = 0;
+  let completed = 0;
+  for (const date of days) {
+    if (!occursOnDate(task, date)) continue;
+    const occurrence = occurrences[`${task.id}:${date}`];
+    const done =
+      occurrence?.status === "completed" || occurrence?.parentManuallyCompleted;
+    if (done) {
+      completed += 1;
+      run += 1;
+      best = Math.max(best, run);
+    } else {
+      run = 0;
+    }
+  }
+  for (let index = days.length - 1; index >= 0; index -= 1) {
+    const date = days[index];
+    if (!occursOnDate(task, date)) continue;
+    const occurrence = occurrences[`${task.id}:${date}`];
+    if (
+      occurrence?.status === "completed" ||
+      occurrence?.parentManuallyCompleted
+    ) {
+      current += 1;
+    } else {
+      break;
+    }
+  }
+  return { current, best, completed };
+}
+
+export function taskMonthProgress(
+  task: Task,
+  occurrences: Record<string, TaskOccurrence>,
+  year: number,
+  monthIndex: number,
+): DayProgress[] {
+  const start = `${year}-${String(monthIndex + 1).padStart(2, "0")}-01`;
+  const last = new Date(year, monthIndex + 1, 0).getDate();
+  const end = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
+  return eachDateKey(start, end).map((date) => {
+    const valid = occursOnDate(task, date);
+    const occurrence = occurrences[`${task.id}:${date}`];
+    const completed =
+      valid &&
+      (occurrence?.status === "completed" ||
+        occurrence?.parentManuallyCompleted)
+        ? 1
+        : 0;
+    return {
+      date,
+      total: valid ? 1 : 0,
+      completed,
+      rate: valid ? completed : null,
+    };
+  });
+}
+
+export function focusInsights(
+  history: TimerHistoryEntry[],
+  through = new Date(),
+): FocusInsights {
+  const startOfToday = new Date(
+    through.getFullYear(),
+    through.getMonth(),
+    through.getDate(),
+  ).getTime();
+  const startOfWeek = startOfToday - ((through.getDay() + 6) % 7) * 86_400_000;
+  const startOfMonth = new Date(
+    through.getFullYear(),
+    through.getMonth(),
+    1,
+  ).getTime();
+  const completedDays = new Set<string>();
+  const hourCounts = new Map<number, number>();
+  let totalFocusSeconds = 0;
+  let focusTodaySeconds = 0;
+  let focusThisWeekSeconds = 0;
+  let focusThisMonthSeconds = 0;
+  for (const entry of history) {
+    const startedAt = new Date(entry.startedAt);
+    const timestamp = startedAt.getTime();
+    const duration = Math.max(0, entry.durationSeconds);
+    totalFocusSeconds += duration;
+    if (timestamp >= startOfToday) focusTodaySeconds += duration;
+    if (timestamp >= startOfWeek) focusThisWeekSeconds += duration;
+    if (timestamp >= startOfMonth) focusThisMonthSeconds += duration;
+    completedDays.add(startedAt.toISOString().slice(0, 10));
+    hourCounts.set(
+      startedAt.getHours(),
+      (hourCounts.get(startedAt.getHours()) ?? 0) + duration,
+    );
+  }
+  const bestFocusHour =
+    [...hourCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const earliest = history.length
+    ? new Date(
+        Math.min(
+          ...history.map((entry) => new Date(entry.startedAt).getTime()),
+        ),
+      )
+    : through;
+  const earliestDay = new Date(
+    earliest.getFullYear(),
+    earliest.getMonth(),
+    earliest.getDate(),
+  ).getTime();
+  const activeDays = Math.max(
+    1,
+    Math.floor((startOfToday - earliestDay) / 86_400_000) + 1,
+  );
+  const consistencyScore = Math.min(
+    100,
+    Math.round((completedDays.size / activeDays) * 100),
+  );
+  const averageSession = history.length
+    ? totalFocusSeconds / history.length
+    : 0;
+  const recommendation =
+    history.length === 0
+      ? "Complete a timer session to unlock personal insights."
+      : averageSession <= 20 * 60
+        ? "Short focused routines are working well. Keep the momentum."
+        : "Try pairing one shorter routine with your longer sessions for consistency.";
+  return {
+    totalFocusSeconds,
+    focusTodaySeconds,
+    focusThisWeekSeconds,
+    focusThisMonthSeconds,
+    consistencyScore,
+    bestFocusHour,
+    recommendation,
+  };
 }
 
 function dayProgress(

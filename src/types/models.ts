@@ -1,4 +1,4 @@
-export type ThemePreference = 'system' | 'light' | 'dark';
+export type ThemePreference = "system" | "light" | "dark";
 
 export interface UserPreferences {
   theme: ThemePreference;
@@ -19,25 +19,27 @@ export interface UserProfile {
 }
 
 export const CATEGORIES = [
-  'Health',
-  'Fitness',
-  'Study',
-  'Work',
-  'Personal',
-  'Reading',
-  'Learning',
-  'Other',
+  "Health",
+  "Fitness",
+  "Study",
+  "Work",
+  "Personal",
+  "Reading",
+  "Learning",
+  "Other",
 ] as const;
 
 export type TaskCategory = (typeof CATEGORIES)[number] | string;
 
+export type TaskPriority = "low" | "medium" | "high";
+
 export type RecurrenceFrequency =
-  | 'none'
-  | 'daily'
-  | 'weekly'
-  | 'weekdays'
-  | 'monthly'
-  | 'custom';
+  | "none"
+  | "daily"
+  | "weekly"
+  | "weekdays"
+  | "monthly"
+  | "custom";
 
 export interface RecurrenceRule {
   frequency: RecurrenceFrequency;
@@ -64,13 +66,16 @@ export interface Task {
   /** Optional HH:mm */
   time: string | null;
   recurrence: RecurrenceRule;
+  priority: TaskPriority;
+  estimatedDurationMinutes: number | null;
+  linkedTimerSessionId: string | null;
   createdAt: string;
   updatedAt: string;
   archived: boolean;
   subtasks: Subtask[];
 }
 
-export type OccurrenceStatus = 'pending' | 'completed' | 'skipped';
+export type OccurrenceStatus = "pending" | "completed" | "skipped";
 
 export interface SubtaskCompletion {
   completed: boolean;
@@ -88,7 +93,7 @@ export interface TaskOccurrence {
   parentManuallyCompleted: boolean;
 }
 
-export type TimerSectionType = 'activity' | 'break';
+export type TimerSectionType = "activity" | "break";
 
 export interface TimerSection {
   id: string;
@@ -108,7 +113,7 @@ export interface TimerSession {
   sections: TimerSection[];
 }
 
-export type ActiveTimerStatus = 'idle' | 'running' | 'paused' | 'completed';
+export type ActiveTimerStatus = "idle" | "running" | "paused" | "completed";
 
 export interface ActiveTimerState {
   sessionId: string;
@@ -121,6 +126,20 @@ export interface ActiveTimerState {
   remainingMsWhenPaused: number | null;
   startedAt: number;
   completedSectionCount: number;
+  taskId: string | null;
+  taskDate: string | null;
+}
+
+export interface TimerHistoryEntry {
+  id: string;
+  sessionId: string;
+  sessionName: string;
+  taskId: string | null;
+  taskDate: string | null;
+  startedAt: string;
+  completedAt: string;
+  durationSeconds: number;
+  completedSectionCount: number;
 }
 
 export interface PersistedAppData {
@@ -132,7 +151,7 @@ export interface PersistedAppData {
 }
 
 export const defaultPreferences = (): UserPreferences => ({
-  theme: 'system',
+  theme: "system",
   notificationsEnabled: true,
   taskRemindersEnabled: true,
   timerNotificationsEnabled: true,

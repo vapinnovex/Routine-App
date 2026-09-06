@@ -21,6 +21,7 @@ import { useTaskStore } from "@/store/taskStore";
 import { useUserStore } from "@/store/userStore";
 import type {
     ActiveTimerState,
+    TimerHistoryEntry,
     TimerSection,
     TimerSession,
 } from "@/types/models";
@@ -38,13 +39,18 @@ interface TimerState {
   sessions: TimerSession[];
   active: ActiveTimerState | null;
   lastCompleted: ActiveTimerState | null;
+  history: TimerHistoryEntry[];
   setHydrated: () => void;
   saveSession: (input: SessionInput, id?: string) => TimerSession;
-  deleteSession: (id: string) => void;
+  deleteSession: (id: string) => boolean;
   moveSession: (id: string, direction: -1 | 1) => void;
   reorderSessions: (ids: string[]) => void;
   duplicateSession: (id: string) => TimerSession | null;
-  startSession: (id: string) => ActiveTimerState | null;
+  startSession: (
+    id: string,
+    taskId?: string,
+    taskDate?: string,
+  ) => ActiveTimerState | null;
   startQuickTimer: (durationSeconds: number) => ActiveTimerState;
   tickCatchUp: () => void;
   pause: () => void;
@@ -54,6 +60,7 @@ interface TimerState {
   restart: () => void;
   end: () => void;
   clearLastCompleted: () => void;
+  finishCompletedTimer: (completed: ActiveTimerState) => void;
   installSampleSessions: () => void;
   clearSessions: () => void;
 }
@@ -63,15 +70,16 @@ function uniqueName(
   sessions: TimerSession[],
   ignoreId?: string,
 ): string {
+  const normalizedName = String(name ?? "").trim() || "Untitled session";
   const existing = new Set(
     sessions
       .filter((session) => session.id !== ignoreId)
-      .map((session) => session.name.toLowerCase()),
+      .map((session) => String(session.name ?? "").toLowerCase()),
   );
-  if (!existing.has(name.toLowerCase())) return name;
+  if (!existing.has(normalizedName.toLowerCase())) return normalizedName;
   let index = 2;
-  while (existing.has(`${name} ${index}`.toLowerCase())) index += 1;
-  return `${name} ${index}`;
+  while (existing.has(`${normalizedName} ${index}`.toLowerCase())) index += 1;
+  return `${normalizedName} ${index}`;
 }
 
 function toSections(
@@ -111,10 +119,11 @@ export const useTimerStore = create<TimerState>()(
       sessions: [],
       active: null,
       lastCompleted: null,
+      history: [],
       setHydrated: () => set({ hydrated: true }),
       saveSession: (input, id) => {
         const now = new Date().toISOString();
-        const sections = toSections(input.sections);
+        const sections = toSections(input.sections ?? []);
         if (id) {
           const current = get().sessions.find((session) => session.id === id);
           if (current) {
@@ -154,10 +163,15 @@ export const useTimerStore = create<TimerState>()(
         return created;
       },
       deleteSession: (id) => {
+        const isLinked = useTaskStore
+          .getState()
+          .tasks.some((task) => task.linkedTimerSessionId === id);
+        if (isLinked) return false;
         set({
           sessions: get().sessions.filter((session) => session.id !== id),
           hasUserChanges: true,
         });
+        return true;
       },
       moveSession: (id, direction) => {
         set((state) => {
@@ -205,7 +219,7 @@ export const useTimerStore = create<TimerState>()(
             })),
         });
       },
-      startSession: (id) => {
+      startSession: (id, taskId, taskDate) => {
         const session = get().sessions.find((item) => item.id === id);
         if (!session || session.sections.length === 0) return null;
         const active = startTimer(
@@ -213,6 +227,8 @@ export const useTimerStore = create<TimerState>()(
           session.name,
           session.sections,
           Date.now(),
+          taskId ?? null,
+          taskDate ?? null,
         );
         set({
           active,
@@ -251,8 +267,7 @@ export const useTimerStore = create<TimerState>()(
         if (!active) return;
         const next = catchUpTimer(active, Date.now());
         if (next.status === "completed") {
-          set({ active: null, lastCompleted: next });
-          void cancelTimerNotifications();
+          get().finishCompletedTimer(next);
           return;
         }
         if (
@@ -274,8 +289,7 @@ export const useTimerStore = create<TimerState>()(
         if (!active) return;
         const next = resumeTimer(active, Date.now());
         if (next.status === "completed") {
-          set({ active: null, lastCompleted: next });
-          void cancelTimerNotifications();
+          get().finishCompletedTimer(next);
           return;
         }
         set({ active: next });
@@ -286,8 +300,7 @@ export const useTimerStore = create<TimerState>()(
         if (!active) return;
         const next = skipSection(active, Date.now());
         if (next.status === "completed") {
-          set({ active: null, lastCompleted: next });
-          void cancelTimerNotifications();
+          get().finishCompletedTimer(next);
           return;
         }
         set({ active: next });
@@ -312,6 +325,45 @@ export const useTimerStore = create<TimerState>()(
         void cancelTimerNotifications();
       },
       clearLastCompleted: () => set({ lastCompleted: null }),
+      finishCompletedTimer: (completed) => {
+        const completedAt = new Date().toISOString();
+        const historyEntry: TimerHistoryEntry = {
+          id: createId(),
+          sessionId: completed.sessionId,
+          sessionName: completed.sessionName,
+          taskId: completed.taskId,
+          taskDate: completed.taskDate,
+          startedAt: new Date(completed.startedAt).toISOString(),
+          completedAt,
+          durationSeconds: completed.sections.reduce(
+            (sum, section) => sum + section.durationSeconds,
+            0,
+          ),
+          completedSectionCount: completed.completedSectionCount,
+        };
+        if (completed.taskId && completed.taskDate) {
+          const taskState = useTaskStore.getState();
+          const task = taskState.tasks.find(
+            (item) => item.id === completed.taskId,
+          );
+          const occurrence = task
+            ? taskState.occurrences[`${task.id}:${completed.taskDate}`]
+            : undefined;
+          if (
+            task &&
+            occurrence?.status !== "completed" &&
+            !occurrence?.parentManuallyCompleted
+          ) {
+            taskState.toggleTaskComplete(task.id, completed.taskDate);
+          }
+        }
+        set((state) => ({
+          active: null,
+          lastCompleted: completed,
+          history: [historyEntry, ...state.history].slice(0, 500),
+        }));
+        void cancelTimerNotifications();
+      },
       installSampleSessions: () => {
         set({
           sessions: [...buildSampleSessions(), ...get().sessions],
@@ -323,6 +375,7 @@ export const useTimerStore = create<TimerState>()(
           sessions: [],
           active: null,
           lastCompleted: null,
+          history: [],
           hasUserChanges: false,
         }),
     }),
@@ -332,13 +385,18 @@ export const useTimerStore = create<TimerState>()(
         createPersistStorage<
           Pick<
             TimerState,
-            "sessions" | "active" | "lastCompleted" | "hasUserChanges"
+            | "sessions"
+            | "active"
+            | "lastCompleted"
+            | "history"
+            | "hasUserChanges"
           >
         >(),
       partialize: (state) => ({
         sessions: state.sessions,
         active: state.active,
         lastCompleted: state.lastCompleted,
+        history: state.history,
         hasUserChanges: state.hasUserChanges,
       }),
       onRehydrateStorage: () => (state) => {

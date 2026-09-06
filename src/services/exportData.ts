@@ -1,13 +1,16 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Clipboard from 'expo-clipboard';
-import { File, Paths } from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Clipboard from "expo-clipboard";
+import { File, Paths } from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
-import { useTaskStore } from '@/store/taskStore';
-import { useTimerStore } from '@/store/timerStore';
-import { useUserStore } from '@/store/userStore';
+import { useTaskStore } from "@/store/taskStore";
+import { useTimerStore } from "@/store/timerStore";
+import { useUserStore } from "@/store/userStore";
 
-export async function exportLocalData(): Promise<{ ok: boolean; message: string }> {
+export async function exportLocalData(): Promise<{
+  ok: boolean;
+  message: string;
+}> {
   try {
     const payload = {
       exportedAt: new Date().toISOString(),
@@ -15,6 +18,7 @@ export async function exportLocalData(): Promise<{ ok: boolean; message: string 
       tasks: useTaskStore.getState().tasks,
       occurrences: useTaskStore.getState().occurrences,
       sessions: useTimerStore.getState().sessions,
+      history: useTimerStore.getState().history,
     };
     const json = JSON.stringify(payload, null, 2);
 
@@ -25,19 +29,19 @@ export async function exportLocalData(): Promise<{ ok: boolean; message: string 
       const sharingAvailable = await Sharing.isAvailableAsync();
       if (sharingAvailable) {
         await Sharing.shareAsync(file.uri, {
-          mimeType: 'application/json',
-          dialogTitle: 'Export Routine data',
+          mimeType: "application/json",
+          dialogTitle: "Export Routine data",
         });
-        return { ok: true, message: 'Export ready to share.' };
+        return { ok: true, message: "Export ready to share." };
       }
     } catch {
       /* fall through to clipboard */
     }
 
     await Clipboard.setStringAsync(json);
-    return { ok: true, message: 'Data copied to the clipboard.' };
+    return { ok: true, message: "Data copied to the clipboard." };
   } catch {
-    return { ok: false, message: 'Could not export data. Please try again.' };
+    return { ok: false, message: "Could not export data. Please try again." };
   }
 }
 
@@ -45,5 +49,9 @@ export async function clearAllLocalData(): Promise<void> {
   useTaskStore.getState().clearTasks();
   useTimerStore.getState().clearSessions();
   useUserStore.getState().clearUser();
-  await AsyncStorage.multiRemove(['routine-user', 'routine-tasks', 'routine-timer']);
+  await AsyncStorage.multiRemove([
+    "routine-user",
+    "routine-tasks",
+    "routine-timer",
+  ]);
 }

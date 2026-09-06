@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
 import { TaskRow } from "@/components/tasks/TaskRow";
+import { CountdownOverlay } from "@/components/timer/CountdownOverlay";
 import { QuickTimerSheet } from "@/components/timer/QuickTimerSheet";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -38,8 +39,23 @@ export function HomeScreen() {
   const [timerOpen, setTimerOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickTitle, setQuickTitle] = useState("");
+  const [quickTimerDuration, setQuickTimerDuration] = useState<number | null>(
+    null,
+  );
   const streak = currentStreak(tasks, occurrences);
   const allDone = total > 0 && completed === total;
+  const completionCounts = new Map<string, number>();
+  Object.values(occurrences).forEach((occurrence) => {
+    if (
+      occurrence.status === "completed" ||
+      occurrence.parentManuallyCompleted
+    ) {
+      completionCounts.set(
+        occurrence.taskId,
+        (completionCounts.get(occurrence.taskId) ?? 0) + 1,
+      );
+    }
+  });
 
   const completeTask = (taskId: string) => {
     toggle(taskId, todayKey());
@@ -155,6 +171,7 @@ export function HomeScreen() {
               ) : null}
               <TaskRow
                 item={item}
+                completionCount={completionCounts.get(item.task.id) ?? 0}
                 onToggle={() => completeTask(item.task.id)}
                 onSubtaskToggle={(subtaskId) =>
                   toggleSubtask(item.task.id, todayKey(), subtaskId)
@@ -205,8 +222,17 @@ export function HomeScreen() {
         visible={timerOpen}
         onClose={() => setTimerOpen(false)}
         onStart={(duration) => {
-          startQuickTimer(duration);
           setTimerOpen(false);
+          setQuickTimerDuration(duration);
+        }}
+      />
+      <CountdownOverlay
+        visible={quickTimerDuration !== null}
+        onCancel={() => setQuickTimerDuration(null)}
+        onComplete={() => {
+          if (quickTimerDuration === null) return;
+          startQuickTimer(quickTimerDuration);
+          setQuickTimerDuration(null);
           router.push("/session/run");
         }}
       />

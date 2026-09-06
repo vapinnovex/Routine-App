@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
+import { Heatmap } from "@/components/tasks/Heatmap";
 import { MonthCalendar } from "@/components/tasks/MonthCalendar";
 import { TaskRow } from "@/components/tasks/TaskRow";
 import { Card } from "@/components/ui/Card";
@@ -12,16 +13,14 @@ import { SegmentedControl } from "@/components/ui/Segmented";
 import { AppText } from "@/components/ui/Text";
 import { spacing } from "@/constants/theme";
 import { successHaptic } from "@/services/feedback";
-import { resolveForDate, resolveOccurrence } from "@/services/occurrences";
-import { nextOccurrenceDates } from "@/services/recurrence";
+import { resolveForDate } from "@/services/occurrences";
 import { monthStats } from "@/services/stats";
 import { useTaskStore } from "@/store/taskStore";
 import { usePreferences } from "@/store/userStore";
 import { useAppTheme } from "@/theme/ThemeProvider";
 import { formatShortDate, todayKey } from "@/utils/dates";
-import { occurrenceId } from "@/utils/id";
 
-type Tab = "today" | "upcoming" | "done" | "calendar";
+type Tab = "today" | "overview" | "calendar";
 
 export function TasksScreen() {
   const { colors } = useAppTheme();
@@ -32,81 +31,46 @@ export function TasksScreen() {
   const toggleSubtask = useTaskStore((state) => state.toggleSubtask);
   const [tab, setTab] = useState<Tab>("today");
   const today = todayKey();
-  const now = new Date();
+  const [calendarCursor, setCalendarCursor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(today);
   const stats = useMemo(
-    () => monthStats(tasks, occurrences, now.getFullYear(), now.getMonth()),
-    [tasks, occurrences, now],
+    () =>
+      monthStats(
+        tasks,
+        occurrences,
+        calendarCursor.getFullYear(),
+        calendarCursor.getMonth(),
+      ),
+    [calendarCursor, occurrences, tasks],
   );
   const todayItems = resolveForDate(tasks, occurrences, today);
   const calendarItems = resolveForDate(tasks, occurrences, selectedDate);
-  const upcoming = useMemo(
+  const completionCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    Object.values(occurrences).forEach((occurrence) => {
+      if (
+        occurrence.status === "completed" ||
+        occurrence.parentManuallyCompleted
+      ) {
+        counts.set(occurrence.taskId, (counts.get(occurrence.taskId) ?? 0) + 1);
+      }
+    });
+    return counts;
+  }, [occurrences]);
+  const focusItems = useMemo(
     () =>
-      tasks
-        .filter((task) => !task.archived)
-        .flatMap((task) =>
-          nextOccurrenceDates(task, today, 8)
-            .filter((date) => date !== today)
-            .slice(0, 3)
-            .map((date) => ({
-              date,
-              item: resolveOccurrence(
-                task,
-                date,
-                occurrences[occurrenceId(task.id, date)],
-              ),
-            })),
-        )
-        .sort(
-          (a, b) =>
-            a.date.localeCompare(b.date) ||
-            a.item.task.title.localeCompare(b.item.task.title),
-        )
-        .slice(0, 24),
-    [occurrences, tasks, today],
-  );
-  const upcomingGroups = useMemo(() => {
-    const groups = new Map<string, (typeof upcoming)[number][]>();
-    for (const entry of upcoming) {
-      const group = groups.get(entry.date) ?? [];
-      group.push(entry);
-      groups.set(entry.date, group);
-    }
-    return [...groups.entries()];
-  }, [upcoming]);
-  const completed = useMemo(
-    () =>
-      Object.values(occurrences)
-        .filter(
-          (item) => item.status === "completed" || item.parentManuallyCompleted,
-        )
-        .map((item) => {
-          const task = tasks.find((entry) => entry.id === item.taskId);
-          return task
-            ? {
-                date: item.date,
-                item: resolveOccurrence(task, item.date, item),
-              }
-            : null;
+      [...todayItems]
+        .filter((item) => !item.isComplete && !item.isSkipped)
+        .sort((a, b) => {
+          const rank = { high: 0, medium: 1, low: 2 };
+          return (
+            rank[a.task.priority ?? "medium"] -
+            rank[b.task.priority ?? "medium"]
+          );
         })
-        .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
-        .filter((entry) => !entry.item.task.archived)
-        .sort(
-          (a, b) =>
-            b.date.localeCompare(a.date) ||
-            a.item.task.title.localeCompare(b.item.task.title),
-        ),
-    [occurrences, tasks],
+        .slice(0, 3),
+    [todayItems],
   );
-  const completedGroups = useMemo(() => {
-    const groups = new Map<string, (typeof completed)[number][]>();
-    for (const entry of completed) {
-      const group = groups.get(entry.date) ?? [];
-      group.push(entry);
-      groups.set(entry.date, group);
-    }
-    return [...groups.entries()];
-  }, [completed]);
   const onToggle = (taskId: string, date: string) => {
     toggle(taskId, date);
     void successHaptic(preferences);
@@ -129,6 +93,7 @@ export function TasksScreen() {
         onSubtaskToggle={(subtaskId) =>
           toggleSubtask(item.task.id, date, subtaskId)
         }
+        completionCount={completionCounts.get(item.task.id) ?? 0}
         disabled={date > today}
       />
     </Card>
@@ -151,8 +116,7 @@ export function TasksScreen() {
         onChange={setTab}
         options={[
           { value: "today", label: "Today" },
-          { value: "upcoming", label: "Upcoming" },
-          { value: "done", label: "Done" },
+          { value: "overview", label: "Overview" },
           { value: "calendar", label: "Calendar" },
         ]}
       />
@@ -170,43 +134,27 @@ export function TasksScreen() {
           />
         )
       ) : null}
-      {tab === "upcoming" ? (
-        upcoming.length ? (
-          <View style={{ marginTop: spacing.md }}>
-            {upcomingGroups.map(([date, entries]) => (
-              <View key={date}>
-                <AppText variant="caption" muted>
-                  {formatShortDate(date)}
-                </AppText>
-                {entries.map(({ item }, index) => row(item, date, index))}
-              </View>
-            ))}
-          </View>
-        ) : (
-          <EmptyState
-            title="Nothing upcoming."
-            body="Add a repeating task or schedule something for later."
-          />
-        )
-      ) : null}
-      {tab === "done" ? (
-        completed.length ? (
-          <View style={{ marginTop: spacing.md }}>
-            {completedGroups.map(([date, entries]) => (
-              <View key={date}>
-                <AppText variant="caption" muted>
-                  {formatShortDate(date)}
-                </AppText>
-                {entries.map(({ item }, index) => row(item, date, index))}
-              </View>
-            ))}
-          </View>
-        ) : (
-          <EmptyState
-            title="No completed tasks yet."
-            body="Finish a task today and it will show up here."
-          />
-        )
+      {tab === "overview" ? (
+        <View style={{ marginTop: spacing.md, gap: spacing.md }}>
+          <Card style={{ gap: spacing.xs }}>
+            <AppText variant="subheading">Your month at a glance</AppText>
+            <AppText muted>
+              {stats.overallCompletion}% complete · {stats.currentStreak} day
+              current streak
+            </AppText>
+            <Heatmap days={stats.days} />
+          </Card>
+          <Card style={{ gap: spacing.sm }}>
+            <AppText variant="subheading">Top 3 for today</AppText>
+            {focusItems.length ? (
+              focusItems.map((item, index) => row(item, today, index))
+            ) : (
+              <AppText muted>
+                Everything important is handled for today.
+              </AppText>
+            )}
+          </Card>
+        </View>
       ) : null}
       {tab === "calendar" ? (
         <View style={{ marginTop: spacing.md, gap: spacing.md }}>
@@ -220,11 +168,22 @@ export function TasksScreen() {
             </AppText>
             <View style={{ height: spacing.md }} />
             <MonthCalendar
-              year={now.getFullYear()}
-              monthIndex={now.getMonth()}
+              year={calendarCursor.getFullYear()}
+              monthIndex={calendarCursor.getMonth()}
               days={stats.days}
               selected={selectedDate}
               onSelect={setSelectedDate}
+              onMonthChange={(direction) => {
+                const next = new Date(
+                  calendarCursor.getFullYear(),
+                  calendarCursor.getMonth() + direction,
+                  1,
+                );
+                setCalendarCursor(next);
+                setSelectedDate(
+                  `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`,
+                );
+              }}
             />
           </Card>
           {calendarItems.length ? (

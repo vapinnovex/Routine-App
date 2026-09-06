@@ -12,8 +12,9 @@ import { Screen } from "@/components/ui/Screen";
 import { AppText } from "@/components/ui/Text";
 import { spacing } from "@/constants/theme";
 import { resolveForDate } from "@/services/occurrences";
-import { computeStatistics, monthStats } from "@/services/stats";
+import { computeStatistics, focusInsights, monthStats } from "@/services/stats";
 import { useTaskStore } from "@/store/taskStore";
+import { useTimerStore } from "@/store/timerStore";
 import { useAppTheme } from "@/theme/ThemeProvider";
 import { addMonths, formatShortDate, todayKey } from "@/utils/dates";
 
@@ -21,6 +22,7 @@ export function MonthlyProgressScreen() {
   const { colors } = useAppTheme();
   const tasks = useTaskStore((state) => state.tasks);
   const occurrences = useTaskStore((state) => state.occurrences);
+  const timerHistory = useTimerStore((state) => state.history);
   const toggle = useTaskStore((state) => state.toggleTaskComplete);
   const [cursor, setCursor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(todayKey());
@@ -35,6 +37,14 @@ export function MonthlyProgressScreen() {
   );
   const selectedItems = resolveForDate(tasks, occurrences, selectedDate);
   const hasCompletedActivity = stats.days.some((day) => day.completed > 0);
+  const focus = useMemo(() => focusInsights(timerHistory), [timerHistory]);
+  const hourLabel =
+    focus.bestFocusHour === null
+      ? "—"
+      : new Date(2020, 0, 1, focus.bestFocusHour).toLocaleTimeString(
+          undefined,
+          { hour: "numeric" },
+        );
 
   return (
     <Screen>
@@ -66,6 +76,9 @@ export function MonthlyProgressScreen() {
           days={stats.days}
           selected={selectedDate}
           onSelect={setSelectedDate}
+          onMonthChange={(direction) =>
+            setCursor((current) => addMonths(current, direction))
+          }
         />
         <AppText variant="subheading" style={{ marginTop: spacing.md }}>
           {formatShortDate(selectedDate)}
@@ -139,6 +152,25 @@ export function MonthlyProgressScreen() {
           Most completed category {overall.mostCompletedCategory ?? "—"}
         </AppText>
         <AppText>Missed tasks {overall.missedTasks}</AppText>
+      </Card>
+      <Card style={{ marginTop: spacing.md, gap: spacing.xs }}>
+        <AppText variant="caption" muted>
+          Focus insights
+        </AppText>
+        <AppText>
+          Total focus {Math.round(focus.totalFocusSeconds / 60)} min
+        </AppText>
+        <AppText>
+          Today {Math.round(focus.focusTodaySeconds / 60)} min · This week{" "}
+          {Math.round(focus.focusThisWeekSeconds / 60)} min
+        </AppText>
+        <AppText>
+          This month {Math.round(focus.focusThisMonthSeconds / 60)} min
+        </AppText>
+        <AppText>
+          Consistency {focus.consistencyScore}% · Best focus time {hourLabel}
+        </AppText>
+        <AppText muted>{focus.recommendation}</AppText>
       </Card>
     </Screen>
   );
