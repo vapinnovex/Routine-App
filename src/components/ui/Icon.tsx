@@ -23,7 +23,8 @@ export type IconName =
   | "grip"
   | "flame"
   | "sun"
-  | "shuffle";
+  | "shuffle"
+  | "link";
 
 interface IconProps {
   name: IconName;
@@ -85,6 +86,29 @@ export function Icon({ name, color, size = 22 }: IconProps) {
           />
           <Path
             d="M9 4h6"
+            stroke={stroke}
+            strokeWidth={1.8}
+            strokeLinecap="round"
+          />
+        </Svg>
+      );
+    case "link":
+      return (
+        <Svg {...props}>
+          <Path
+            d="M10 13.5 8.5 15a3.5 3.5 0 0 0 5 5l2.5-2.5a3.5 3.5 0 0 0 0-5"
+            stroke={stroke}
+            strokeWidth={1.8}
+            strokeLinecap="round"
+          />
+          <Path
+            d="m14 10.5 1.5-1.5a3.5 3.5 0 0 0-5-5L8 6.5a3.5 3.5 0 0 0 0 5"
+            stroke={stroke}
+            strokeWidth={1.8}
+            strokeLinecap="round"
+          />
+          <Path
+            d="m9 15 6-6"
             stroke={stroke}
             strokeWidth={1.8}
             strokeLinecap="round"

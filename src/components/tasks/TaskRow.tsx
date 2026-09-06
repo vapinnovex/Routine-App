@@ -18,6 +18,7 @@ export function TaskRow({
   onLongPress,
   isDragging = false,
   disabled = false,
+  completionCount,
 }: {
   item: ResolvedOccurrence;
   onToggle: () => void;
@@ -26,6 +27,7 @@ export function TaskRow({
   onLongPress?: () => void;
   isDragging?: boolean;
   disabled?: boolean;
+  completionCount?: number;
 }) {
   const { colors } = useAppTheme();
   const [expanded, setExpanded] = useState(false);
@@ -60,6 +62,25 @@ export function TaskRow({
             {item.task.title}
           </AppText>
           <View style={styles.meta}>
+            <AppText
+              variant="caption"
+              color={
+                item.isSkipped
+                  ? colors.textSecondary
+                  : item.task.priority === "high"
+                    ? colors.danger
+                    : item.task.priority === "low"
+                      ? colors.textSecondary
+                      : colors.warning
+              }
+            >
+              {item.isSkipped ? "Skipped today" : item.task.priority}
+            </AppText>
+            {completionCount !== undefined ? (
+              <AppText variant="caption" color={colors.success}>
+                {completionCount} completed
+              </AppText>
+            ) : null}
             {item.task.category ? (
               <CategoryBadge label={item.task.category} />
             ) : null}
@@ -71,6 +92,11 @@ export function TaskRow({
             {time ? (
               <AppText variant="caption" color={colors.secondary}>
                 {time}
+              </AppText>
+            ) : null}
+            {item.task.estimatedDurationMinutes ? (
+              <AppText variant="caption" muted>
+                ~{item.task.estimatedDurationMinutes} min
               </AppText>
             ) : null}
           </View>

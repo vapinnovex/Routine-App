@@ -1,6 +1,6 @@
-import type { Subtask, Task, TaskOccurrence } from '@/types/models';
-import { occursOnDate } from '@/services/recurrence';
-import { occurrenceId } from '@/utils/id';
+import { occursOnDate } from "@/services/recurrence";
+import type { Subtask, Task, TaskOccurrence } from "@/types/models";
+import { occurrenceId } from "@/utils/id";
 
 export interface ResolvedOccurrence {
   occurrence: TaskOccurrence;
@@ -9,6 +9,7 @@ export interface ResolvedOccurrence {
   completedCount: number;
   totalSubtasks: number;
   isComplete: boolean;
+  isSkipped: boolean;
 }
 
 export function emptyOccurrence(task: Task, date: string): TaskOccurrence {
@@ -16,7 +17,7 @@ export function emptyOccurrence(task: Task, date: string): TaskOccurrence {
     id: occurrenceId(task.id, date),
     taskId: task.id,
     date,
-    status: 'pending',
+    status: "pending",
     completedAt: null,
     subtaskCompletions: {},
     parentManuallyCompleted: false,
@@ -34,8 +35,11 @@ export function resolveSubtasks(task: Task, occurrence: TaskOccurrence) {
   });
 }
 
-export function isOccurrenceComplete(task: Task, occurrence: TaskOccurrence): boolean {
-  if (occurrence.status === 'completed' || occurrence.parentManuallyCompleted) {
+export function isOccurrenceComplete(
+  task: Task,
+  occurrence: TaskOccurrence,
+): boolean {
+  if (occurrence.status === "completed" || occurrence.parentManuallyCompleted) {
     return true;
   }
   const subtasks = resolveSubtasks(task, occurrence);
@@ -50,9 +54,13 @@ export function resolveOccurrence(
   const occurrence = stored ?? emptyOccurrence(task, date);
   const subtasks = resolveSubtasks(task, occurrence);
   const completedCount = subtasks.filter((item) => item.completed).length;
-  const autoComplete = subtasks.length > 0 && completedCount === subtasks.length;
+  const autoComplete =
+    subtasks.length > 0 && completedCount === subtasks.length;
   const isComplete =
-    occurrence.parentManuallyCompleted || occurrence.status === 'completed' || autoComplete;
+    occurrence.parentManuallyCompleted ||
+    occurrence.status === "completed" ||
+    autoComplete;
+  const isSkipped = occurrence.status === "skipped";
 
   return {
     occurrence,
@@ -61,6 +69,7 @@ export function resolveOccurrence(
     completedCount,
     totalSubtasks: subtasks.length,
     isComplete,
+    isSkipped,
   };
 }
 
@@ -94,15 +103,27 @@ export function applyParentToggle(
   if (complete) {
     return {
       ...occurrence,
-      status: 'completed',
+      status: "completed",
       completedAt,
       parentManuallyCompleted: true,
     };
   }
   return {
     ...occurrence,
-    status: 'pending',
+    status: "pending",
     completedAt: null,
+    parentManuallyCompleted: false,
+  };
+}
+
+export function applySkip(
+  occurrence: TaskOccurrence,
+  skippedAt: string,
+): TaskOccurrence {
+  return {
+    ...occurrence,
+    status: "skipped",
+    completedAt: skippedAt,
     parentManuallyCompleted: false,
   };
 }
@@ -126,12 +147,13 @@ export function applySubtaskToggle(
     subtaskCompletions: nextCompletions,
   };
   const resolved = resolveSubtasks(task, next);
-  const allDone = resolved.length > 0 && resolved.every((item) => item.completed);
+  const allDone =
+    resolved.length > 0 && resolved.every((item) => item.completed);
 
   if (allDone) {
     return {
       ...next,
-      status: 'completed',
+      status: "completed",
       completedAt,
       parentManuallyCompleted: false,
     };
@@ -140,7 +162,7 @@ export function applySubtaskToggle(
   if (!occurrence.parentManuallyCompleted) {
     return {
       ...next,
-      status: 'pending',
+      status: "pending",
       completedAt: null,
     };
   }

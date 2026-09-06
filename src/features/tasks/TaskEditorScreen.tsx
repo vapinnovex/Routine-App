@@ -21,6 +21,7 @@ import { Screen } from "@/components/ui/Screen";
 import { AppText } from "@/components/ui/Text";
 import { spacing } from "@/constants/theme";
 import { useTaskStore } from "@/store/taskStore";
+import { useTimerStore } from "@/store/timerStore";
 import { useToastStore } from "@/store/toastStore";
 import { useAppTheme } from "@/theme/ThemeProvider";
 import type { RecurrenceFrequency, RecurrenceRule } from "@/types/models";
@@ -55,11 +56,23 @@ export function TaskEditorScreen() {
   );
   const createTask = useTaskStore((state) => state.createTask);
   const updateTask = useTaskStore((state) => state.updateTask);
+  const sessions = useTimerStore((state) => state.sessions);
 
   const [title, setTitle] = useState(existing?.title ?? "");
   const [category, setCategory] = useState<string | null>(
     existing?.category ?? null,
   );
+  const [priority, setPriority] = useState<"low" | "medium" | "high">(
+    existing?.priority ?? "medium",
+  );
+  const [estimatedDuration, setEstimatedDuration] = useState(
+    existing?.estimatedDurationMinutes
+      ? String(existing.estimatedDurationMinutes)
+      : "",
+  );
+  const [linkedTimerSessionId, setLinkedTimerSessionId] = useState<
+    string | null
+  >(existing?.linkedTimerSessionId ?? null);
   const [date, setDate] = useState(
     existing?.date ??
       (Array.isArray(params.date) ? params.date[0] : params.date) ??
@@ -105,6 +118,11 @@ export function TaskEditorScreen() {
       time: hasTime ? time : null,
       recurrence,
       subtasks: subtasks.split("\n"),
+      priority,
+      estimatedDurationMinutes: estimatedDuration.trim()
+        ? Math.max(1, Number(estimatedDuration) || 1)
+        : null,
+      linkedTimerSessionId,
     };
     if (existing) updateTask(existing.id, payload);
     else createTask(payload);
@@ -270,6 +288,103 @@ export function TaskEditorScreen() {
           />
         ) : null}
       </Card>
+
+      <AppText variant="caption" muted style={styles.label}>
+        Priority
+      </AppText>
+      <View style={styles.chips}>
+        {(["low", "medium", "high"] as const).map((value) => (
+          <Pressable
+            key={value}
+            onPress={() => setPriority(value)}
+            style={[
+              styles.chip,
+              {
+                backgroundColor:
+                  priority === value ? colors.primary : colors.surfaceMuted,
+              },
+            ]}
+          >
+            <AppText
+              color={
+                priority === value ? colors.textInverse : colors.textPrimary
+              }
+            >
+              {value[0].toUpperCase() + value.slice(1)}
+            </AppText>
+          </Pressable>
+        ))}
+      </View>
+      <View style={[styles.switchRow, { marginTop: spacing.md }]}>
+        <AppText>Estimated minutes</AppText>
+        <TextInput
+          value={estimatedDuration}
+          onChangeText={setEstimatedDuration}
+          keyboardType="number-pad"
+          placeholder="Optional"
+          placeholderTextColor={colors.textSecondary}
+          style={[
+            styles.smallInput,
+            { color: colors.textPrimary, borderColor: colors.border },
+          ]}
+        />
+      </View>
+      {sessions.length > 0 ? (
+        <View style={{ marginTop: spacing.md }}>
+          <AppText variant="caption" muted>
+            Linked timer
+          </AppText>
+          <View style={styles.chips}>
+            <Pressable
+              onPress={() => setLinkedTimerSessionId(null)}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor:
+                    linkedTimerSessionId === null
+                      ? colors.secondary
+                      : colors.surfaceMuted,
+                },
+              ]}
+            >
+              <AppText
+                color={
+                  linkedTimerSessionId === null
+                    ? colors.textInverse
+                    : colors.textPrimary
+                }
+              >
+                None
+              </AppText>
+            </Pressable>
+            {sessions.map((session) => (
+              <Pressable
+                key={session.id}
+                onPress={() => setLinkedTimerSessionId(session.id)}
+                style={[
+                  styles.chip,
+                  {
+                    backgroundColor:
+                      linkedTimerSessionId === session.id
+                        ? colors.secondary
+                        : colors.surfaceMuted,
+                  },
+                ]}
+              >
+                <AppText
+                  color={
+                    linkedTimerSessionId === session.id
+                      ? colors.textInverse
+                      : colors.textPrimary
+                  }
+                >
+                  {session.name}
+                </AppText>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
 
       <AppText variant="caption" muted style={styles.label}>
         Repeat

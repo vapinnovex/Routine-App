@@ -1,14 +1,17 @@
-import type { ActiveTimerState, TimerSection } from '@/types/models';
+import type { ActiveTimerState, TimerSection } from "@/types/models";
 
 export function totalDurationSeconds(sections: TimerSection[]): number {
-  return sections.reduce((sum, section) => sum + Math.max(0, section.durationSeconds), 0);
+  return sections.reduce(
+    (sum, section) => sum + Math.max(0, section.durationSeconds),
+    0,
+  );
 }
 
 export function remainingMs(state: ActiveTimerState, now: number): number {
-  if (state.status === 'paused') {
+  if (state.status === "paused") {
     return Math.max(0, state.remainingMsWhenPaused ?? 0);
   }
-  if (state.status !== 'running' || !state.sectionEndsAt) {
+  if (state.status !== "running" || !state.sectionEndsAt) {
     const section = state.sections[state.currentIndex];
     return (section?.durationSeconds ?? 0) * 1000;
   }
@@ -19,8 +22,11 @@ export function remainingMs(state: ActiveTimerState, now: number): number {
  * Advance through any sections whose end timestamps are already in the past.
  * Used after backgrounding, lock-screen, or app restart.
  */
-export function catchUpTimer(state: ActiveTimerState, now: number): ActiveTimerState {
-  if (state.status !== 'running' || !state.sectionEndsAt) return state;
+export function catchUpTimer(
+  state: ActiveTimerState,
+  now: number,
+): ActiveTimerState {
+  if (state.status !== "running" || !state.sectionEndsAt) return state;
 
   let currentIndex = state.currentIndex;
   let sectionEndsAt = state.sectionEndsAt;
@@ -34,7 +40,7 @@ export function catchUpTimer(state: ActiveTimerState, now: number): ActiveTimerS
         currentIndex,
         sectionEndsAt: null,
         remainingMsWhenPaused: 0,
-        status: 'completed',
+        status: "completed",
         completedSectionCount: state.sections.length,
       };
     }
@@ -56,6 +62,8 @@ export function startTimer(
   sessionName: string,
   sections: TimerSection[],
   now: number,
+  taskId: string | null = null,
+  taskDate: string | null = null,
 ): ActiveTimerState {
   const ordered = [...sections].sort((a, b) => a.order - b.order);
   const first = ordered[0];
@@ -64,45 +72,62 @@ export function startTimer(
     sessionName,
     sections: ordered,
     currentIndex: 0,
-    status: 'running',
+    status: "running",
     sectionEndsAt: now + Math.max(1, first.durationSeconds) * 1000,
     remainingMsWhenPaused: null,
     startedAt: now,
     completedSectionCount: 0,
+    taskId,
+    taskDate,
   };
 }
 
-export function pauseTimer(state: ActiveTimerState, now: number): ActiveTimerState {
-  if (state.status !== 'running') return state;
+export function pauseTimer(
+  state: ActiveTimerState,
+  now: number,
+): ActiveTimerState {
+  if (state.status !== "running") return state;
   return {
     ...state,
-    status: 'paused',
+    status: "paused",
     remainingMsWhenPaused: remainingMs(state, now),
     sectionEndsAt: null,
   };
 }
 
-export function resumeTimer(state: ActiveTimerState, now: number): ActiveTimerState {
-  if (state.status !== 'paused') return state;
+export function resumeTimer(
+  state: ActiveTimerState,
+  now: number,
+): ActiveTimerState {
+  if (state.status !== "paused") return state;
   const remaining = Math.max(0, state.remainingMsWhenPaused ?? 0);
   if (remaining <= 0) {
-    return skipSection({ ...state, status: 'running', remainingMsWhenPaused: 0 }, now);
+    return skipSection(
+      { ...state, status: "running", remainingMsWhenPaused: 0 },
+      now,
+    );
   }
   return {
     ...state,
-    status: 'running',
+    status: "running",
     sectionEndsAt: now + remaining,
     remainingMsWhenPaused: null,
   };
 }
 
-export function skipSection(state: ActiveTimerState, now: number): ActiveTimerState {
-  if (state.status === 'completed') return state;
-  const completedSectionCount = Math.max(state.completedSectionCount, state.currentIndex + 1);
+export function skipSection(
+  state: ActiveTimerState,
+  now: number,
+): ActiveTimerState {
+  if (state.status === "completed") return state;
+  const completedSectionCount = Math.max(
+    state.completedSectionCount,
+    state.currentIndex + 1,
+  );
   if (state.currentIndex >= state.sections.length - 1) {
     return {
       ...state,
-      status: 'completed',
+      status: "completed",
       sectionEndsAt: null,
       remainingMsWhenPaused: 0,
       completedSectionCount: state.sections.length,
@@ -113,19 +138,22 @@ export function skipSection(state: ActiveTimerState, now: number): ActiveTimerSt
   return {
     ...state,
     currentIndex: nextIndex,
-    status: 'running',
+    status: "running",
     sectionEndsAt: now + Math.max(1, next.durationSeconds) * 1000,
     remainingMsWhenPaused: null,
     completedSectionCount,
   };
 }
 
-export function previousSection(state: ActiveTimerState, now: number): ActiveTimerState {
+export function previousSection(
+  state: ActiveTimerState,
+  now: number,
+): ActiveTimerState {
   if (state.currentIndex === 0) {
     const first = state.sections[0];
     return {
       ...state,
-      status: 'running',
+      status: "running",
       sectionEndsAt: now + Math.max(1, first.durationSeconds) * 1000,
       remainingMsWhenPaused: null,
     };
@@ -135,15 +163,25 @@ export function previousSection(state: ActiveTimerState, now: number): ActiveTim
   return {
     ...state,
     currentIndex: nextIndex,
-    status: 'running',
+    status: "running",
     sectionEndsAt: now + Math.max(1, section.durationSeconds) * 1000,
     remainingMsWhenPaused: null,
     completedSectionCount: Math.min(state.completedSectionCount, nextIndex),
   };
 }
 
-export function restartTimer(state: ActiveTimerState, now: number): ActiveTimerState {
-  return startTimer(state.sessionId, state.sessionName, state.sections, now);
+export function restartTimer(
+  state: ActiveTimerState,
+  now: number,
+): ActiveTimerState {
+  return startTimer(
+    state.sessionId,
+    state.sessionName,
+    state.sections,
+    now,
+    state.taskId,
+    state.taskDate,
+  );
 }
 
 export function sectionProgress(state: ActiveTimerState, now: number): number {
@@ -160,7 +198,8 @@ export function sessionProgress(state: ActiveTimerState, now: number): number {
     .slice(0, state.currentIndex)
     .reduce((sum, section) => sum + section.durationSeconds * 1000, 0);
   const currentElapsed =
-    Math.max(1, state.sections[state.currentIndex]?.durationSeconds ?? 0) * 1000 -
+    Math.max(1, state.sections[state.currentIndex]?.durationSeconds ?? 0) *
+      1000 -
     remainingMs(state, now);
   return (completed + currentElapsed) / total;
 }
@@ -169,15 +208,19 @@ export function upcomingNotifications(
   state: ActiveTimerState,
   now: number,
 ): Array<{ fireDate: Date; title: string; body: string }> {
-  if (state.status !== 'running' || !state.sectionEndsAt) return [];
+  if (state.status !== "running" || !state.sectionEndsAt) return [];
   const items: Array<{ fireDate: Date; title: string; body: string }> = [];
   let fireAt = state.sectionEndsAt;
-  for (let index = state.currentIndex; index < state.sections.length; index += 1) {
+  for (
+    let index = state.currentIndex;
+    index < state.sections.length;
+    index += 1
+  ) {
     const current = state.sections[index];
     const next = state.sections[index + 1];
     const body = next
       ? `Next: ${next.title} · ${formatShortDuration(next.durationSeconds)}`
-      : 'Session complete';
+      : "Session complete";
     items.push({
       fireDate: new Date(fireAt),
       title: `${current.title} complete`,
@@ -201,5 +244,5 @@ function formatShortDuration(seconds: number): string {
     const rest = seconds % 60;
     return rest ? `${minutes} min ${rest} sec` : `${minutes} min`;
   }
-  return `${seconds} second${seconds === 1 ? '' : 's'}`;
+  return `${seconds} second${seconds === 1 ? "" : "s"}`;
 }

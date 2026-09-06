@@ -48,7 +48,9 @@
           ],
           "defaultChannel": "timer"
         }
-      ]
+      ],
+      "expo-audio",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true

@@ -1,4 +1,9 @@
-import { bestStreak, currentStreak, monthStats } from "../services/stats";
+import {
+    bestStreak,
+    currentStreak,
+    focusInsights,
+    monthStats,
+} from "../services/stats";
 import type { Task, TaskOccurrence } from "../types/models";
 
 function task(id: string, date: string): Task {
@@ -9,6 +14,9 @@ function task(id: string, date: string): Task {
     date,
     time: null,
     recurrence: { frequency: "none" },
+    priority: "medium",
+    estimatedDurationMinutes: null,
+    linkedTimerSessionId: null,
     createdAt: `${date}T00:00:00.000Z`,
     updatedAt: `${date}T00:00:00.000Z`,
     archived: false,
@@ -83,5 +91,28 @@ describe("monthly calculations", () => {
       "c:2026-08-03": completed("c", "2026-08-03"),
     };
     expect(currentStreak(tasks, occurrences, "2026-08-03")).toBe(2);
+  });
+
+  it("summarizes timer history into useful focus insights", () => {
+    const insights = focusInsights(
+      [
+        {
+          id: "h1",
+          sessionId: "s1",
+          sessionName: "Focus",
+          taskId: null,
+          taskDate: null,
+          startedAt: "2026-08-18T09:00:00.000",
+          completedAt: "2026-08-18T09:25:00.000",
+          durationSeconds: 1500,
+          completedSectionCount: 1,
+        },
+      ],
+      new Date("2026-08-18T12:00:00.000"),
+    );
+    expect(insights.totalFocusSeconds).toBe(1500);
+    expect(insights.focusTodaySeconds).toBe(1500);
+    expect(insights.bestFocusHour).toBe(9);
+    expect(insights.consistencyScore).toBe(100);
   });
 });

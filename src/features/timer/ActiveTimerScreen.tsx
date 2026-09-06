@@ -42,7 +42,13 @@ export function ActiveTimerScreen() {
 
   const speak = (message: string) => {
     if (Platform.OS === "web") return;
-    Speech.speak(message, { rate: 0.95, volume: 1 });
+    void Speech.stop().catch(() => undefined);
+    Speech.speak(message, {
+      rate: 0.95,
+      volume: 1,
+      useApplicationAudioSession: false,
+      onError: () => undefined,
+    });
   };
 
   useEffect(() => {

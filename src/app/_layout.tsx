@@ -9,6 +9,7 @@ import { ToastHost } from "@/components/ui/ToastHost";
 import {
     cancelTimerNotifications,
     configureNotifications,
+    handleNotificationResponse,
     scheduleTaskNotifications,
     scheduleTimerNotifications,
 } from "@/services/notifications";
@@ -46,7 +47,22 @@ function AppEffects() {
   const { scheme } = useAppTheme();
 
   useEffect(() => {
-    void configureNotifications();
+    let responseSubscription: { remove: () => void } | null = null;
+    void configureNotifications().then(async () => {
+      if (typeof window === "undefined" && process.env.JEST_WORKER_ID) return;
+      try {
+        const Notifications = await import("expo-notifications");
+        responseSubscription =
+          Notifications.addNotificationResponseReceivedListener(
+            (response) =>
+              void handleNotificationResponse(response, (taskId, date) => {
+                useTaskStore.getState().skipTask(taskId, date);
+              }),
+          );
+      } catch {
+        responseSubscription = null;
+      }
+    });
     const syncTasks = () => {
       const user = useUserStore.getState().user;
       const preferences = user?.preferences;
@@ -66,6 +82,7 @@ function AppEffects() {
       );
     };
     syncTasks();
+    return () => responseSubscription?.remove();
   }, []);
 
   useEffect(() => {
