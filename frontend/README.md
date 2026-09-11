@@ -1,6 +1,6 @@
 # Routine
 
-A local-first mobile app for daily tasks, progress, and reusable multi-section timers. This is V0 of a personal productivity product — no accounts, no AI, no cloud.
+An Expo mobile and web app for daily tasks, progress, and reusable timers, backed by a Python FastAPI API and MongoDB. Register or log in to load your account's data across devices.
 
 ## 1. Project structure
 
@@ -30,14 +30,28 @@ assets/                Icons, splash, timer chime
 
 Requirements:
 
-- Node 20+
+- Node 22.13+ (Expo SDK 57)
 - npm
 - Expo Go on your phone, or Xcode / Android Studio for a development build
 
 ```bash
-cd "Productivity & Routine App"
-npm install
+cd frontend
+npm ci
+cp .env.example .env
 ```
+
+In PowerShell use `Copy-Item .env.example .env`. Start the backend using
+[the backend setup guide](../backend/README.md). Set `EXPO_PUBLIC_API_URL` in `.env`:
+
+| Client | Example API address |
+| --- | --- |
+| Browser / iOS simulator | `http://localhost:8000/api/v1` |
+| Android emulator | `http://10.0.2.2:8000/api/v1` |
+| Physical phone | `http://YOUR-COMPUTER-LAN-IP:8000/api/v1` |
+
+The phone and computer must share a network and port 8000 must be reachable. Use HTTPS
+for deployed builds. Restart Expo after changing the API URL. Add web origins to the backend's
+`CORS_ORIGINS`. API credentials and MongoDB URIs belong only in the backend environment.
 
 ## 3. Run on iOS
 
@@ -86,8 +100,8 @@ npx expo run:android
 | `expo` / `react-native` / `react`                      | App runtime                                               |
 | `expo-router`                                          | File-based navigation (tabs + task/timer stacks)          |
 | `typescript`                                           | Strict typing                                             |
-| `zustand`                                              | Local application state, easy to swap for a backend later |
-| `@react-native-async-storage/async-storage`            | Persist tasks, sessions, profile                          |
+| `zustand`                                              | In-memory UI state synchronized with the backend          |
+| `expo-secure-store`                                    | Native login session token storage                       |
 | `react-native-reanimated`                              | Progress and checkbox motion                              |
 | `react-native-gesture-handler`                         | Navigation gestures                                       |
 | `react-native-svg`                                     | Icons and progress ring                                   |
@@ -101,19 +115,29 @@ npx expo run:android
 
 There is no NativeWind layer. Styling uses a shared token file (`src/constants/theme.ts`) plus `StyleSheet` so light/dark stay semantic rather than inverted.
 
-## 6. Local storage architecture
+## 6. Backend data architecture
 
-Three Zustand stores persist independently:
+Three Zustand stores hold in-memory data loaded after authentication:
 
-| Store           | AsyncStorage key | Contents                             |
-| --------------- | ---------------- | ------------------------------------ |
-| `useUserStore`  | `routine-user`   | Name, onboarding, preferences        |
-| `useTaskStore`  | `routine-tasks`  | Tasks + occurrence map               |
-| `useTimerStore` | `routine-timer`  | Saved sessions + active/paused timer |
+| Store | Contents |
+| --- | --- |
+| `useUserStore` | Account profile and preferences |
+| `useTaskStore` | Tasks, subtasks, ordering, and dated completion records |
+| `useTimerStore` | Timer templates, ordering, active/paused timer, completed runs |
 
-The UI never talks to AsyncStorage directly. Screens call store actions; actions persist through Zustand `persist` middleware.
+Screens call store actions. `services/accountSync.ts` serializes changes through
+`PUT /api/v1/users/me/data`; the server validates and atomically stores each revision.
+The API also provides resource CRUD routes for tasks, sessions, occurrences, and history.
+Saving status and failures are visible. A failed save remains in memory for retry; a conflicting
+edit requires explicitly discarding unsaved changes and reloading. Settings offers server
+refresh, export, account-data reset, and logout. Export waits for saves and fetches MongoDB data.
 
-On launch, the root layout waits until all three stores have rehydrated. If a timer was running when the app was killed, it is reconstructed with `catchUpTimer(now)` so elapsed time is based on timestamps, not a JS interval.
+On launch, the root layout loads the account from the backend before showing protected screens.
+An overdue timer is recovered through the normal completion flow so history and linked task
+completion are also saved. Web sessions use an HttpOnly cookie; Android/iOS tokens use SecureStore.
+No task/profile data is written to AsyncStorage or localStorage. Existing data from the old
+device-only version is not automatically imported or removed; new accounts start empty unless
+sample data is selected during registration.
 
 ## 7. Data model
 
@@ -134,7 +158,8 @@ On launch, the root layout waits until all three stores have rehydrated. If a ti
 - Local notifications require OS permission and Expo Go / a dev build with the notifications plugin.
 - Export writes JSON (share sheet or clipboard). There is no import yet.
 - Recurrence does not yet support “last Friday of the month” style rules.
-- No iCloud / Google backup. Clearing app data or uninstalling removes local state.
+- Account loading and saving require a reachable backend. There is no persistent offline queue;
+  keep the app open until pending changes are saved. MongoDB backup operations remain a deployment concern.
 - Expo Go cannot use custom notification sounds on every platform; the in-app chime still plays in the foreground.
 
 ## 9. Recommended next steps
@@ -143,7 +168,7 @@ On launch, the root layout waits until all three stores have rehydrated. If a ti
 2. Import for the JSON export, plus an optional encrypted backup.
 3. Calendar widgets / lock-screen live activity for the running timer.
 4. Richer recurrence (end dates, skip dates).
-5. Sync layer behind the existing stores when you add an account.
+5. Incremental synchronization and separate history collections for larger accounts.
 6. Health, nutrition, and AI modules as separate `src/features/` packages — do not fold them into the task store.
 
 ## Scripts
@@ -154,11 +179,14 @@ npm test           # Recurrence, completion, stats, timer tests
 npm run typecheck  # TypeScript
 ```
 
-Sample data is offered on first launch (“Get started”) and can be reloaded from Settings.
+Sample tasks and timers can be included when registering an account.
 
 ## 10. Web PWA
 
-The web build is a static PWA. `public/manifest.json`, `public/service-worker.js`, and the generated `public/pwa-*.png` files are copied into `dist/` by Expo’s static export. The service worker uses a network-first strategy for navigations and a cache-first strategy for same-origin assets; the local-first stores continue to provide the app data offline.
+The web build is a static PWA. `public/manifest.json`, `public/service-worker.js`, and the
+`public/pwa-*.png` files are copied into `dist/` by Expo's static export. The service worker
+caches the app shell and assets, but excludes `/api/`, authenticated requests, and no-store
+responses. Account data requires the backend, including when starting an installed PWA.
 
 ### Deploy over HTTPS
 
@@ -187,8 +215,8 @@ Before publishing, confirm these URLs return `200` from the deployed domain:
 1. Open the deployed HTTPS URL in Chrome or Safari while online and wait for the first load to finish.
 2. In browser developer tools, inspect **Application > Service Workers** and confirm `service-worker.js` is activated. Confirm the manifest and cached resources are present under **Cache Storage**.
 3. Reload once while online so the current document is cached.
-4. Turn off the network or enable **Offline** in developer tools, close the tab, and open the same URL again. The app shell should start and previously loaded routes/assets should remain available.
-5. Restore the network and reload after a release. The service worker cache version (`routine-web-v1`) should be incremented when cache behavior or shell files require an explicit refresh.
+4. Turn off the network and reopen the URL. The cached shell should show a connection error; account screens require a connection. Restore the network and choose Retry.
+5. Restore the network and reload after a release. Increment the service worker cache version when changing cache behavior.
 
 ### iPhone Safari test and installation
 
@@ -196,7 +224,7 @@ Use the deployed HTTPS URL on the iPhone, not the Expo development server:
 
 1. Open the URL in Safari and let the app finish loading once while online.
 2. Tap **Share**, choose **Add to Home Screen**, keep the name as `Routine`, then tap **Add**.
-3. Launch Routine from the new Home Screen icon. It should open without Safari chrome and retain the app’s local data.
-4. For the offline check, open the installed app once online, enable Airplane Mode, then launch it again. Verify the shell and previously visited screens open. Turn Airplane Mode off afterward.
+3. Launch Routine from the new Home Screen icon. Sign in if needed and verify that account data loads from MongoDB.
+4. Enable Airplane Mode and relaunch. Verify the connection-error state, then restore connectivity and Retry.
 
 Safari does not expose Chrome’s service-worker panels on iPhone. Validate activation and cache contents in desktop Safari’s **Develop > [iPhone] > Web Inspector** while the phone is connected, then repeat the real Home Screen and Airplane Mode test on the device.

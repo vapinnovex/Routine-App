@@ -1,11 +1,14 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, type ReactNode } from "react";
-import { ActivityIndicator, AppState, View } from "react-native";
+import { AppState, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ToastHost } from "@/components/ui/ToastHost";
+import { AccountConnection } from "@/components/AccountConnection";
+import { initializeAccount } from "@/services/accountSync";
+import { useConnectionStore } from "@/store/connectionStore";
 import {
     cancelTimerNotifications,
     configureNotifications,
@@ -21,12 +24,15 @@ import { AppThemeProvider, useAppTheme } from "@/theme/ThemeProvider";
 export { ErrorBoundary } from "expo-router";
 
 function HydrationGate({ children }: { children: ReactNode }) {
+  const ready = useConnectionStore((state) => state.ready);
+  const error = useConnectionStore((state) => state.error);
+  useEffect(() => { void initializeAccount(); }, []);
   const userReady = useUserStore((state) => state.hydrated);
   const tasksReady = useTaskStore((state) => state.hydrated);
   const timerReady = useTimerStore((state) => state.hydrated);
   const { colors } = useAppTheme();
 
-  if (!userReady || !tasksReady || !timerReady) {
+  if (!ready || !userReady || !tasksReady || !timerReady) {
     return (
       <View
         style={{
@@ -36,11 +42,14 @@ function HydrationGate({ children }: { children: ReactNode }) {
           backgroundColor: colors.background,
         }}
       >
-        <ActivityIndicator color={colors.primary} />
+        <AccountConnection />
       </View>
     );
   }
-  return <>{children}</>;
+  return <>
+    <AccountConnection />
+    <View style={{ flex: 1 }} pointerEvents={error ? "none" : "auto"}>{children}</View>
+  </>;
 }
 
 function AppEffects() {
@@ -105,6 +114,7 @@ function AppEffects() {
 }
 
 export default function RootLayout() {
+  const user = useUserStore((state) => state.user);
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
@@ -113,18 +123,22 @@ export default function RootLayout() {
             <AppEffects />
             <Stack screenOptions={{ headerShown: false, animation: "fade" }}>
               <Stack.Screen name="index" />
-              <Stack.Screen name="welcome" />
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="task/[id]" />
-              <Stack.Screen name="task/edit" />
-              <Stack.Screen name="progress" />
-              <Stack.Screen name="settings" />
-              <Stack.Screen name="session/edit" />
-              <Stack.Screen
-                name="session/run"
-                options={{ gestureEnabled: false, animation: "fade" }}
-              />
-              <Stack.Screen name="session/complete" />
+              <Stack.Protected guard={!user}>
+                <Stack.Screen name="welcome" />
+              </Stack.Protected>
+              <Stack.Protected guard={Boolean(user)}>
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="task/[id]" />
+                <Stack.Screen name="task/edit" />
+                <Stack.Screen name="progress" />
+                <Stack.Screen name="settings" />
+                <Stack.Screen name="session/edit" />
+                <Stack.Screen
+                  name="session/run"
+                  options={{ gestureEnabled: false, animation: "fade" }}
+                />
+                <Stack.Screen name="session/complete" />
+              </Stack.Protected>
             </Stack>
             <ToastHost />
           </HydrationGate>

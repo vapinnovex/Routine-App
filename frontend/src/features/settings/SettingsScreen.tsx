@@ -8,7 +8,8 @@ import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { Screen } from "@/components/ui/Screen";
 import { AppText } from "@/components/ui/Text";
 import { spacing } from "@/constants/theme";
-import { clearAllLocalData, exportLocalData } from "@/services/exportData";
+import { exportData } from "@/services/exportData";
+import { clearAccountData, flushChanges, signOut, reloadAccount } from "@/services/accountSync";
 import {
     requestNotificationPermission,
     scheduleTaskNotifications,
@@ -28,22 +29,17 @@ export function SettingsScreen() {
   const user = useUserStore((state) => state.user);
   const updateName = useUserStore((state) => state.updateName);
   const updatePreferences = useUserStore((state) => state.updatePreferences);
-  const tasks = useTaskStore((state) => state.tasks);
-  const occurrences = useTaskStore((state) => state.occurrences);
-  const sessions = useTimerStore((state) => state.sessions);
-  const taskChanges = useTaskStore((state) => state.hasUserChanges);
-  const sessionChanges = useTimerStore((state) => state.hasUserChanges);
   const [name, setName] = useState(user?.name ?? "");
   const [savedName, setSavedName] = useState(user?.name ?? "");
   const [confirmClear, setConfirmClear] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const run = async (action: () => Promise<void>) => {
+    setBusy(true);
+    try { await action(); }
+    catch (error) { useToastStore.getState().show(error instanceof Error ? error.message : "Request failed"); }
+    finally { setBusy(false); }
+  };
   const preferences = user?.preferences;
-  const hasChangedData =
-    Object.keys(occurrences).length > 0 ||
-    taskChanges ||
-    sessionChanges ||
-    (user?.sampleDataInstalled
-      ? tasks.length !== 7 || sessions.length !== 6
-      : tasks.length > 0 || sessions.length > 0);
 
   useEffect(() => {
     const nextName = user?.name ?? "";
@@ -66,6 +62,7 @@ export function SettingsScreen() {
         <AppText variant="caption" muted>
           Profile
         </AppText>
+        <AppText muted>{user?.email}</AppText>
         <TextInput
           value={name}
           onChangeText={setName}
@@ -77,14 +74,16 @@ export function SettingsScreen() {
         {name.trim() !== savedName.trim() ? (
           <Button
             label="Save profile"
-            onPress={() => {
+            disabled={busy}
+            onPress={() => void run(async () => {
               const nextName = name.trim();
               if (!nextName) return;
               updateName(nextName);
+              await flushChanges();
               setName(nextName);
               setSavedName(nextName);
               useToastStore.getState().show("Profile saved");
-            }}
+            })}
           />
         ) : null}
       </Card>
@@ -183,28 +182,31 @@ export function SettingsScreen() {
           label="Export data"
           variant="secondary"
           onPress={async () => {
-            const result = await exportLocalData();
+            const result = await exportData();
             useToastStore.getState().show(result.message);
           }}
         />
         <Button
-          label="Clear local data"
+          label="Clear account data"
           variant="danger"
-          disabled={!hasChangedData}
+          disabled={busy}
           onPress={() => setConfirmClear(true)}
         />
+        <Button label="Refresh from server" variant="secondary" disabled={busy}
+          onPress={() => void run(async () => { await flushChanges(); await reloadAccount(); })} />
+        <Button label="Log out" variant="ghost" disabled={busy}
+          onPress={() => void run(async () => { await signOut(); router.replace("/welcome"); })} />
       </Card>
 
       <ConfirmationDialog
         visible={confirmClear}
         title="Clear everything?"
-        message="This removes tasks, sessions, and your local profile from this device."
+        message="This permanently removes your tasks, progress, timer sessions, and history from your account on all devices. Your login and preferences are kept."
         confirmLabel="Clear"
         onCancel={() => setConfirmClear(false)}
-        onConfirm={async () => {
+        onConfirm={() => {
           setConfirmClear(false);
-          await clearAllLocalData();
-          router.replace("/welcome");
+          void run(async () => { await clearAccountData(); useToastStore.getState().show("Account data cleared"); });
         }}
       />
     </Screen>

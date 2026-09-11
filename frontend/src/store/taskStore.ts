@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 
 import { scheduleTaskNotifications } from "@/services/notifications";
 import {
@@ -10,7 +9,6 @@ import {
     resolveForDate,
     resolveOccurrence,
 } from "@/services/occurrences";
-import { createPersistStorage } from "@/services/persistStorage";
 import { buildSampleTasks } from "@/services/sampleData";
 import { useUserStore } from "@/store/userStore";
 import type {
@@ -77,7 +75,6 @@ function syncTaskNotifications(tasks: Task[]) {
 }
 
 export const useTaskStore = create<TaskState>()(
-  persist(
     (set, get) => ({
       hydrated: false,
       hasUserChanges: false,
@@ -317,22 +314,7 @@ export const useTaskStore = create<TaskState>()(
       clearTasks: () =>
         set({ tasks: [], occurrences: {}, hasUserChanges: false }),
     }),
-    {
-      name: "routine-tasks",
-      storage:
-        createPersistStorage<
-          Pick<TaskState, "tasks" | "occurrences" | "hasUserChanges">
-        >(),
-      partialize: (state) => ({
-        tasks: state.tasks,
-        occurrences: state.occurrences,
-        hasUserChanges: state.hasUserChanges,
-      }),
-      onRehydrateStorage: () => () => {
-        useTaskStore.setState({ hydrated: true });
-      },
-    },
-  ),
+
 );
 
 export function useTodayProgress() {

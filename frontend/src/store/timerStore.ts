@@ -1,12 +1,10 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 
 import {
     cancelTimerNotifications,
     scheduleTaskNotifications,
     scheduleTimerNotifications,
 } from "@/services/notifications";
-import { createPersistStorage } from "@/services/persistStorage";
 import { buildSampleSessions } from "@/services/sampleData";
 import {
     catchUpTimer,
@@ -112,7 +110,6 @@ async function syncNotifications(active: ActiveTimerState | null) {
 }
 
 export const useTimerStore = create<TimerState>()(
-  persist(
     (set, get) => ({
       hydrated: false,
       hasUserChanges: false,
@@ -360,7 +357,7 @@ export const useTimerStore = create<TimerState>()(
         set((state) => ({
           active: null,
           lastCompleted: completed,
-          history: [historyEntry, ...state.history].slice(0, 500),
+          history: [historyEntry, ...state.history],
         }));
         void cancelTimerNotifications();
       },
@@ -379,37 +376,5 @@ export const useTimerStore = create<TimerState>()(
           hasUserChanges: false,
         }),
     }),
-    {
-      name: "routine-timer",
-      storage:
-        createPersistStorage<
-          Pick<
-            TimerState,
-            | "sessions"
-            | "active"
-            | "lastCompleted"
-            | "history"
-            | "hasUserChanges"
-          >
-        >(),
-      partialize: (state) => ({
-        sessions: state.sessions,
-        active: state.active,
-        lastCompleted: state.lastCompleted,
-        history: state.history,
-        hasUserChanges: state.hasUserChanges,
-      }),
-      onRehydrateStorage: () => (state) => {
-        useTimerStore.setState({ hydrated: true });
-        if (state?.active) {
-          const next = catchUpTimer(state.active, Date.now());
-          if (next.status === "completed") {
-            useTimerStore.setState({ active: null, lastCompleted: next });
-          } else {
-            useTimerStore.setState({ active: next });
-          }
-        }
-      },
-    },
-  ),
+
 );

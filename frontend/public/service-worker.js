@@ -1,4 +1,4 @@
-const CACHE_NAME = "routine-web-v3";
+const CACHE_NAME = "routine-web-v4";
 const APP_SHELL = [
   "/",
   "/manifest.json",
@@ -34,6 +34,8 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (
     event.request.method !== "GET" ||
+    new URL(event.request.url).pathname.startsWith("/api/") ||
+    event.request.headers.has("Authorization") ||
     new URL(event.request.url).origin !== self.location.origin
   ) {
     return;
@@ -57,7 +59,7 @@ self.addEventListener("fetch", (event) => {
       (cached) =>
         cached ||
         fetch(event.request).then((response) => {
-          if (response.ok) {
+          if (response.ok && !response.headers.get("Cache-Control")?.includes("no-store")) {
             const copy = response.clone();
             caches
               .open(CACHE_NAME)

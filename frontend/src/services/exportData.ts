@@ -1,25 +1,15 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 
-import { useTaskStore } from "@/store/taskStore";
-import { useTimerStore } from "@/store/timerStore";
-import { useUserStore } from "@/store/userStore";
+import { exportAccountData } from "@/services/accountSync";
 
-export async function exportLocalData(): Promise<{
+export async function exportData(): Promise<{
   ok: boolean;
   message: string;
 }> {
   try {
-    const payload = {
-      exportedAt: new Date().toISOString(),
-      user: useUserStore.getState().user,
-      tasks: useTaskStore.getState().tasks,
-      occurrences: useTaskStore.getState().occurrences,
-      sessions: useTimerStore.getState().sessions,
-      history: useTimerStore.getState().history,
-    };
+    const payload = await exportAccountData();
     const json = JSON.stringify(payload, null, 2);
 
     try {
@@ -43,15 +33,4 @@ export async function exportLocalData(): Promise<{
   } catch {
     return { ok: false, message: "Could not export data. Please try again." };
   }
-}
-
-export async function clearAllLocalData(): Promise<void> {
-  useTaskStore.getState().clearTasks();
-  useTimerStore.getState().clearSessions();
-  useUserStore.getState().clearUser();
-  await AsyncStorage.multiRemove([
-    "routine-user",
-    "routine-tasks",
-    "routine-timer",
-  ]);
 }
