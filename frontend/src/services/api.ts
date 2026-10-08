@@ -1,6 +1,8 @@
 import { Platform } from "react-native";
 
-export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000/api/v1").replace(/\/$/, "");
+const defaultUrl = Platform.OS === "web" && typeof location !== "undefined" && !["localhost", "127.0.0.1"].includes(location.hostname)
+  ? "/api/v1" : "http://localhost:8000/api/v1";
+export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? defaultUrl).replace(/\/$/, "");
 let accessToken: string | null = null;
 
 export class ApiError extends Error {

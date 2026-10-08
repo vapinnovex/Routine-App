@@ -1,6 +1,7 @@
+import { InstallApp } from "@/components/InstallApp";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Switch, TextInput, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Switch, TextInput, View } from "react-native";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -51,6 +52,7 @@ export function SettingsScreen() {
 
   return (
     <Screen>
+      <InstallApp />
       <Pressable onPress={() => router.back()}>
         <AppText color={colors.primary}>Back</AppText>
       </Pressable>
@@ -65,6 +67,8 @@ export function SettingsScreen() {
         <AppText muted>{user?.email}</AppText>
         <TextInput
           value={name}
+          maxLength={250}
+          accessibilityLabel="Profile name"
           onChangeText={setName}
           style={[
             styles.input,
@@ -74,7 +78,7 @@ export function SettingsScreen() {
         {name.trim() !== savedName.trim() ? (
           <Button
             label="Save profile"
-            disabled={busy}
+            disabled={busy || !name.trim()}
             onPress={() => void run(async () => {
               const nextName = name.trim();
               if (!nextName) return;
@@ -122,11 +126,15 @@ export function SettingsScreen() {
       </Card>
 
       <Card style={{ marginTop: spacing.md }}>
+        {Platform.OS === "web" && <AppText variant="caption" muted>Scheduled reminders are available in the native app. These preferences sync to your account; browser background notifications are not enabled.</AppText>}
         <Row
+          disabled={Platform.OS === "web"}
           label="Notifications"
           value={preferences.notificationsEnabled}
           onChange={async (value) => {
-            if (value) await requestNotificationPermission();
+            if (value && !(await requestNotificationPermission())) {
+              useToastStore.getState().show("Allow notifications in your device settings to enable reminders."); return;
+            }
             updatePreferences({ notificationsEnabled: value });
             await syncNotifications(
               value,
@@ -136,6 +144,7 @@ export function SettingsScreen() {
           }}
         />
         <Row
+          disabled={Platform.OS === "web" || !preferences.notificationsEnabled}
           label="Task reminders"
           value={preferences.taskRemindersEnabled}
           onChange={async (value) => {
@@ -148,6 +157,7 @@ export function SettingsScreen() {
           }}
         />
         <Row
+          disabled={Platform.OS === "web" || !preferences.notificationsEnabled}
           label="Timer notifications"
           value={preferences.timerNotificationsEnabled}
           onChange={async (value) => {
@@ -198,6 +208,7 @@ export function SettingsScreen() {
           onPress={() => void run(async () => { await signOut(); router.replace("/welcome"); })} />
       </Card>
 
+
       <ConfirmationDialog
         visible={confirmClear}
         title="Clear everything?"
@@ -232,15 +243,17 @@ function Row({
   label,
   value,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value: boolean;
   onChange: (value: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <View style={styles.switchRow}>
       <AppText>{label}</AppText>
-      <Switch value={value} onValueChange={onChange} />
+      <Switch disabled={disabled} accessibilityLabel={label} value={value} onValueChange={onChange} />
     </View>
   );
 }

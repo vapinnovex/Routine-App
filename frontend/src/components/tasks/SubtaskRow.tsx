@@ -9,15 +9,17 @@ export function SubtaskRow({
   completed,
   onToggle,
   onLongPress,
+  disabled = false,
 }: {
   title: string;
   completed: boolean;
   onToggle: () => void;
   onLongPress?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <Pressable onLongPress={onLongPress} style={styles.row} accessibilityLabel={title}>
-      <Checkbox checked={completed} onToggle={onToggle} label={`Complete ${title}`} />
+      <Checkbox disabled={disabled} checked={completed} onToggle={onToggle} label={`Complete ${title}`} />
       <View style={{ flex: 1 }}>
         <AppText style={{ textDecorationLine: completed ? 'line-through' : 'none', opacity: completed ? 0.55 : 1 }}>
           {title}

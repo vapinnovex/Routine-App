@@ -1,10 +1,11 @@
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { router } from "expo-router";
 import * as Speech from "expo-speech";
-import { useEffect, useRef } from "react";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
 import { Icon } from "@/components/ui/Icon";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { AppText } from "@/components/ui/Text";
@@ -23,6 +24,7 @@ import { formatClock, formatDuration, percent } from "@/utils/format";
 
 export function ActiveTimerScreen() {
   const insets = useSafeAreaInsets();
+  const [confirmation, setConfirmation] = useState<"end" | "restart" | null>(null);
   const { colors, scheme } = useAppTheme();
   const preferences = usePreferences();
   const active = useTimerStore((state) => state.active);
@@ -41,7 +43,7 @@ export function ActiveTimerScreen() {
   const announcedCountdown = useRef<Set<string>>(new Set());
 
   const speak = (message: string) => {
-    if (Platform.OS === "web") return;
+    if (Platform.OS === "web" || !preferences.soundEnabled) return;
     void Speech.stop().catch(() => undefined);
     Speech.speak(message, {
       rate: 0.95,
@@ -168,8 +170,9 @@ export function ActiveTimerScreen() {
     : colors.background;
 
   return (
-    <View
-      style={[
+    <ScrollView
+      style={{ flex: 1, backgroundColor: timerBackground }}
+      contentContainerStyle={[
         styles.root,
         {
           paddingTop: insets.top + 16,
@@ -249,7 +252,7 @@ export function ActiveTimerScreen() {
       </View>
       <View style={styles.secondary}>
         <Pressable
-          onPress={restart}
+          onPress={() => setConfirmation("restart")}
           accessibilityLabel="Restart session"
           style={styles.secondaryButton}
         >
@@ -257,10 +260,7 @@ export function ActiveTimerScreen() {
           <AppText color={colors.textSecondary}>Restart</AppText>
         </Pressable>
         <Pressable
-          onPress={() => {
-            end();
-            router.replace("/(tabs)/timer");
-          }}
+          onPress={() => setConfirmation("end")}
           accessibilityLabel="End session"
           style={[styles.secondaryButton, styles.endButton]}
         >
@@ -268,7 +268,15 @@ export function ActiveTimerScreen() {
           <AppText color={colors.danger}>End session</AppText>
         </Pressable>
       </View>
-    </View>
+      <ConfirmationDialog visible={confirmation !== null}
+        title={confirmation === "end" ? "End this session?" : "Restart this session?"}
+        message={confirmation === "end" ? "This unfinished run will not be added to your completed history." : "The timer will start again from the first section."}
+        confirmLabel={confirmation === "end" ? "End session" : "Restart"}
+        onCancel={() => setConfirmation(null)} onConfirm={() => {
+          if (confirmation === "end") { end(); router.replace("/(tabs)/timer"); } else restart();
+          setConfirmation(null);
+        }} />
+    </ScrollView>
   );
 }
 
@@ -301,7 +309,7 @@ function Control({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, paddingHorizontal: spacing.xl },
+  root: { flexGrow: 1, width: "100%", maxWidth: 640, alignSelf: "center", paddingHorizontal: spacing.xl },
   timerCircle: {
     alignItems: "center",
     justifyContent: "center",

@@ -1,10 +1,10 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
 import DraggableFlatList, {
     ScaleDecorator,
     type RenderItemParams,
-} from "react-native-draggable-flatlist";
+} from "@/components/ui/ReorderableList";
 
 import { CountdownOverlay } from "@/components/timer/CountdownOverlay";
 import { QuickTimerSheet } from "@/components/timer/QuickTimerSheet";
@@ -25,6 +25,7 @@ import { formatDuration, plural } from "@/utils/format";
 
 export function SessionsScreen() {
   const { colors } = useAppTheme();
+  const activeTimer = useTimerStore((state) => state.active);
   const sessions = useTimerStore((state) => state.sessions);
   const tasks = useTaskStore((state) => state.tasks);
   const updateTask = useTaskStore((state) => state.updateTask);
@@ -70,6 +71,11 @@ export function SessionsScreen() {
       <AppText muted style={{ marginBottom: spacing.md }}>
         Build reusable routines with timed sections.
       </AppText>
+      {activeTimer && <Card style={{ gap: spacing.sm, marginBottom: spacing.md }}>
+        <AppText variant="subheading">{activeTimer.sessionName}</AppText>
+        <AppText muted>{activeTimer.status === "paused" ? "Paused" : "In progress"} · Return to your current session before starting another.</AppText>
+        <Button label="Return to timer" onPress={() => router.push("/session/run")} />
+      </Card>}
       <Card style={{ gap: spacing.sm, marginBottom: spacing.md }}>
         <AppText variant="subheading">Quick timer</AppText>
         <AppText variant="caption" muted>
@@ -78,7 +84,7 @@ export function SessionsScreen() {
         <Button
           label="Choose duration"
           variant="secondary"
-          onPress={() => setQuickOpen(true)}
+          onPress={() => activeTimer ? router.push("/session/run") : setQuickOpen(true)}
         />
       </Card>
     </View>
@@ -87,6 +93,7 @@ export function SessionsScreen() {
   return (
     <Screen scroll={false} bottomPadding={0}>
       <DraggableFlatList
+        reordering={reordering}
         data={sessions}
         keyExtractor={(session) => session.id}
         containerStyle={styles.sessionListContainer}
@@ -124,7 +131,7 @@ export function SessionsScreen() {
                   >
                     <Icon name="grip" color={colors.textSecondary} size={18} />
                     <AppText variant="caption" muted>
-                      Hold and drag to reorder
+                      {Platform.OS === "web" ? "Use the move buttons below" : "Hold and drag to reorder"}
                     </AppText>
                   </Pressable>
                 ) : null}
@@ -166,7 +173,7 @@ export function SessionsScreen() {
                 <View style={styles.row}>
                   <Button
                     label="Start"
-                    onPress={() => setPendingStart(session.id)}
+                    onPress={() => activeTimer ? router.push("/session/run") : setPendingStart(session.id)}
                     style={{ flex: 1 }}
                   />
                   <Pressable
@@ -290,5 +297,5 @@ const styles = StyleSheet.create({
   },
   sessionList: { flex: 1 },
   sessionListContainer: { flex: 1 },
-  sessionListContent: { paddingBottom: 0 },
+  sessionListContent: { paddingBottom: 112 },
 });

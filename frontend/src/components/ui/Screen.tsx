@@ -30,12 +30,15 @@ export function Screen({
     paddingBottom: insets.bottom + (bottomPadding ?? 112),
     backgroundColor: colors.background,
     flexGrow: 1,
+    width: "100%" as const,
+    maxWidth: 880,
+    alignSelf: "center" as const,
   };
 
   if (!scroll) {
     return (
       <KeyboardAvoidingView
-        style={styles.fill}
+        style={[styles.fill, { backgroundColor: colors.background }]}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <View
@@ -49,7 +52,7 @@ export function Screen({
 
   return (
     <KeyboardAvoidingView
-      style={styles.fill}
+      style={[styles.fill, { backgroundColor: colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView

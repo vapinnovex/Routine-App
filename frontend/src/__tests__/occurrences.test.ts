@@ -68,3 +68,17 @@ describe("task completion", () => {
     expect(resolved.isComplete).toBe(false);
   });
 });
+
+it('can reopen an automatically completed parent', () => {
+  let occurrence = emptyOccurrence(task, task.date);
+  for (const step of task.subtasks) occurrence = applySubtaskToggle(task, occurrence, step.id, true, 'now');
+  occurrence = applyParentToggle(task, occurrence, false, 'now');
+  expect(resolveOccurrence(task, task.date, occurrence).isComplete).toBe(false);
+});
+
+it('never counts a skipped occurrence as complete even with checked subtasks', () => {
+  let occurrence = emptyOccurrence(task, task.date);
+  for (const step of task.subtasks) occurrence = applySubtaskToggle(task, occurrence, step.id, true, 'now');
+  occurrence = applySkip(occurrence, 'now');
+  expect(resolveOccurrence(task, task.date, occurrence)).toMatchObject({ isComplete: false, isSkipped: true });
+});

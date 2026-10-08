@@ -153,3 +153,11 @@ that database. No production database is dropped. Integration tests skip when ne
 Implementation references: [FastAPI CORS](https://fastapi.tiangolo.com/tutorial/cors/),
 [PyMongo asynchronous connections](https://www.mongodb.com/docs/languages/python/pymongo-driver/current/connect/mongoclient/),
 [Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/).
+
+## Phase 2 foundation
+
+`GET /api/v1/capabilities` returns API/schema versions and disabled flags for daily
+questions and leaderboards. Account snapshots accept `schemaVersion: 1` (default
+for older payloads). Active timer state includes optional focus accumulation and
+checkpoint fields. See [Phase 2 foundation](../docs/phase-2-foundation.md) for the
+validated contracts and the publication/scoring work required before activation.

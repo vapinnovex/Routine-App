@@ -53,7 +53,7 @@ export const lightColors: ColorTokens = {
   background: '#F4EFE8',
   surface: '#FFFBF6',
   surfaceMuted: '#EBE3D8',
-  primary: '#E05A33',
+  primary: '#B84022',
   primaryMuted: '#F6D4C8',
   secondary: '#2F6F6A',
   textPrimary: '#1C1917',

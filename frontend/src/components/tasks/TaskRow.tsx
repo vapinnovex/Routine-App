@@ -74,7 +74,7 @@ export function TaskRow({
                       : colors.warning
               }
             >
-              {item.isSkipped ? "Skipped today" : item.task.priority}
+              {item.isSkipped ? "Skipped" : item.task.priority}
             </AppText>
             {completionCount !== undefined ? (
               <AppText variant="caption" color={colors.success}>
@@ -120,7 +120,7 @@ export function TaskRow({
               <Checkbox
                 checked={subtask.completed}
                 onToggle={() => onSubtaskToggle?.(subtask.id)}
-                disabled={disabled}
+                disabled={disabled || !onSubtaskToggle}
                 label={`Complete ${subtask.title}`}
               />
               <AppText

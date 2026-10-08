@@ -33,13 +33,13 @@ export function Heatmap({ days }: { days: DayProgress[] }) {
         {cells.map((day, index) => (
           <View
             key={day?.date ?? `pad-${index}`}
-            style={[styles.cell, { backgroundColor: colorFor(day) }]}
+            style={styles.cell}
             accessibilityLabel={
               day
-                ? `${day.date}: ${day.rate === null ? 'no tasks' : `${Math.round((day.rate ?? 0) * 100)}% complete`}`
+                ? `${day.date}: ${day.rate === null ? (day.total > 0 ? 'scheduled' : 'no tasks') : `${Math.round((day.rate ?? 0) * 100)}% complete`}`
                 : undefined
             }
-          />
+          ><View style={{ flex: 1, borderRadius: radius.sm, backgroundColor: colorFor(day) }} /></View>
         ))}
       </View>
     </View>
@@ -49,9 +49,10 @@ export function Heatmap({ days }: { days: DayProgress[] }) {
 const styles = StyleSheet.create({
   labels: { flexDirection: 'row' },
   label: { width: '14.28%', textAlign: 'center' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap' },
   cell: {
-    width: '12.8%',
+    width: '14.285714%',
+    padding: 3,
     aspectRatio: 1,
     borderRadius: radius.sm,
   },

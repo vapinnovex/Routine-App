@@ -39,6 +39,7 @@ export function isOccurrenceComplete(
   task: Task,
   occurrence: TaskOccurrence,
 ): boolean {
+  if (occurrence.status === "skipped") return false;
   if (occurrence.status === "completed" || occurrence.parentManuallyCompleted) {
     return true;
   }
@@ -54,12 +55,7 @@ export function resolveOccurrence(
   const occurrence = stored ?? emptyOccurrence(task, date);
   const subtasks = resolveSubtasks(task, occurrence);
   const completedCount = subtasks.filter((item) => item.completed).length;
-  const autoComplete =
-    subtasks.length > 0 && completedCount === subtasks.length;
-  const isComplete =
-    occurrence.parentManuallyCompleted ||
-    occurrence.status === "completed" ||
-    autoComplete;
+  const isComplete = isOccurrenceComplete(task, occurrence);
   const isSkipped = occurrence.status === "skipped";
 
   return {
@@ -113,6 +109,10 @@ export function applyParentToggle(
     status: "pending",
     completedAt: null,
     parentManuallyCompleted: false,
+    // If every step was checked, reset them so the parent can actually reopen.
+    // Preserve partial progress when undoing a manual completion.
+    subtaskCompletions: resolveSubtasks(task, occurrence).every((step) => step.completed)
+      ? {} : occurrence.subtaskCompletions,
   };
 }
 

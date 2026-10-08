@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import DraggableFlatList, {
     ScaleDecorator,
     type RenderItemParams,
-} from "react-native-draggable-flatlist";
+} from "@/components/ui/ReorderableList";
 
 import { SectionRow } from "@/components/timer/SectionRow";
 import { Button } from "@/components/ui/Button";
@@ -106,7 +106,9 @@ export function SessionEditorScreen() {
         {existing ? "Edit session" : "Create session"}
       </AppText>
       <TextInput
-        value={name}
+        maxLength={250}
+          accessibilityLabel="Session name"
+          value={name}
         onChangeText={(value) => {
           setName(value);
           setError(null);
@@ -176,6 +178,7 @@ export function SessionEditorScreen() {
         </Pressable>
       ) : null}
       <DraggableFlatList
+        reordering={reorderingSections}
         data={sections}
         keyExtractor={(section) => section.id}
         scrollEnabled={false}
@@ -211,6 +214,7 @@ export function SessionEditorScreen() {
       />
       <Button
         label="Add section"
+        disabled={sections.length >= 200}
         variant="secondary"
         onPress={() =>
           setSections((current) => [
@@ -267,7 +271,9 @@ function SectionEditor({
   return (
     <BottomSheet visible onClose={onClose} title="Section">
       <TextInput
-        value={title}
+        maxLength={250}
+          accessibilityLabel="Name"
+          value={title}
         onChangeText={setTitle}
         placeholder="Push ups"
         placeholderTextColor={colors.textSecondary}
@@ -323,6 +329,7 @@ function SectionEditor({
       </Card>
       <Button
         label="Done"
+        disabled={hours * 3600 + minutes * 60 + seconds < 1}
         onPress={() =>
           onSave({
             ...section,

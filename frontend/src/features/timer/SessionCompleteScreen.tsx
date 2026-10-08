@@ -5,14 +5,13 @@ import { Button } from "@/components/ui/Button";
 import { Screen } from "@/components/ui/Screen";
 import { AppText } from "@/components/ui/Text";
 import { spacing } from "@/constants/theme";
-import { totalDurationSeconds } from "@/services/timerEngine";
 import { useTimerStore } from "@/store/timerStore";
 import { formatDuration } from "@/utils/format";
 
 export function SessionCompleteScreen() {
   const last = useTimerStore((state) => state.lastCompleted);
   const clear = useTimerStore((state) => state.clearLastCompleted);
-  const startSession = useTimerStore((state) => state.startSession);
+  const repeatLast = useTimerStore((state) => state.repeatLast);
 
   if (!last) {
     return (
@@ -37,23 +36,17 @@ export function SessionCompleteScreen() {
           {last.sessionName}
         </AppText>
         <AppText variant="subheading">
-          {total} / {total} sections completed
+          {total} sections in your routine
         </AppText>
         <AppText muted style={{ marginTop: spacing.sm }}>
-          Total time {formatDuration(totalDurationSeconds(last.sections))}
+          Focus time {formatDuration(Math.floor((last.accumulatedFocusMs ?? 0) / 1000))}
         </AppText>
         <AppText style={{ marginTop: spacing.lg }}>Great work.</AppText>
         <View style={{ gap: spacing.sm, marginTop: spacing.xl, width: "100%" }}>
           <Button
             label="Start again"
             onPress={() => {
-              const id = last.sessionId;
-              clear();
-              const active = startSession(
-                id,
-                last.taskId ?? undefined,
-                last.taskDate ?? undefined,
-              );
+              const active = repeatLast();
               if (active) router.replace("/session/run");
             }}
           />

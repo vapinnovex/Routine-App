@@ -117,6 +117,9 @@ export interface TimerSession {
 export type ActiveTimerStatus = "idle" | "running" | "paused" | "completed";
 
 export interface ActiveTimerState {
+  /** Measured activity time; excludes pauses, breaks and skipped time. */
+  accumulatedFocusMs?: number;
+  focusCheckpointMs?: number | null;
   sessionId: string;
   sessionName: string;
   sections: TimerSection[];

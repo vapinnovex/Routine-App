@@ -1,3 +1,4 @@
+import { useTodayKey } from "@/hooks/useTodayKey";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
@@ -31,6 +32,7 @@ import { occurrenceId } from "@/utils/id";
 
 export function TaskDetailScreen() {
   const { colors } = useAppTheme();
+  useTodayKey();
   const preferences = usePreferences();
   const { id, date: dateParam } = useLocalSearchParams<{
     id: string;
@@ -68,6 +70,7 @@ export function TaskDetailScreen() {
   }
 
   const resolved = resolveOccurrence(task, date, stored);
+  const canComplete = date <= todayKey() && occursOnDate(task, date) && !task.archived;
   const time = formatTime(task.time);
   const completedCount = Object.values(occurrences).filter(
     (item) =>
@@ -102,37 +105,35 @@ export function TaskDetailScreen() {
           Progress
         </AppText>
         <AppText variant="heading">
-          {resolved.totalSubtasks > 0
-            ? `${resolved.completedCount} / ${resolved.totalSubtasks}`
-            : resolved.isComplete
-              ? "Complete"
-              : "Open"}
+          {resolved.isComplete ? "Complete" : resolved.isSkipped ? "Skipped" : date > todayKey() ? "Scheduled" : "In progress"}
         </AppText>
         <AppText muted>
-          Completed perfectly {completedCount}{" "}
+          Completed {completedCount}{" "}
           {completedCount === 1 ? "time" : "times"}
         </AppText>
         <Button
-          label={resolved.isComplete ? "Mark incomplete" : "Mark complete"}
+          disabled={!canComplete}
+          label={resolved.isComplete ? "Mark incomplete" : resolved.isSkipped ? "Complete skipped task" : "Mark complete"}
           variant={resolved.isComplete ? "secondary" : "primary"}
           onPress={() => {
             toggleTask(task.id, date);
             void successHaptic(preferences);
           }}
         />
-        {!resolved.isComplete && !resolved.isSkipped && date <= todayKey() ? (
+        {!resolved.isComplete && !resolved.isSkipped && canComplete ? (
           <Button
-            label="Skip for today"
+            label={date === todayKey() ? "Skip today" : "Skip this date"}
             variant="secondary"
             onPress={() => {
               skipTask(task.id, date);
-              useToastStore.getState().show("Skipped for today");
+              useToastStore.getState().show("Task skipped for this date");
             }}
           />
         ) : null}
         {task.linkedTimerSessionId ? (
           <Button
             label="Start linked timer"
+            disabled={!canComplete}
             variant="secondary"
             onPress={() => setCountdown(true)}
           />
@@ -159,6 +160,7 @@ export function TaskDetailScreen() {
               key={subtask.id}
               title={subtask.title}
               completed={subtask.completed}
+              disabled={!canComplete}
               onToggle={() => {
                 toggleSub(task.id, date, subtask.id);
                 void tapHaptic(preferences);
@@ -179,7 +181,9 @@ export function TaskDetailScreen() {
             Add a step
           </AppText>
           <TextInput
-            value={newSub}
+            maxLength={250}
+          accessibilityLabel="New subtask"
+          value={newSub}
             onChangeText={setNewSub}
             placeholder="e.g. Pack water bottle"
             placeholderTextColor={colors.textSecondary}
@@ -201,6 +205,7 @@ export function TaskDetailScreen() {
           />
           <Button
             label="Add subtask"
+            disabled={!newSub.trim() || task.subtasks.length >= 200}
             onPress={() => {
               if (!newSub.trim()) return;
               addSubtask(task.id, newSub);
@@ -238,7 +243,7 @@ export function TaskDetailScreen() {
           <View>
             <AppText variant="heading">{streaks.completed}</AppText>
             <AppText variant="caption" muted>
-              Perfect days
+              Completions
             </AppText>
           </View>
         </View>
@@ -266,7 +271,9 @@ export function TaskDetailScreen() {
           monthIndex={historyCursor.getMonth()}
           days={historyDays}
           selected={date}
-          onSelect={() => undefined}
+          onSelect={(selected) => {
+            if (occursOnDate(task, selected)) router.setParams({ date: selected });
+          }}
           getDayStatus={(day) => {
             if (!occursOnDate(task, day)) return "invalid";
             if (day > todayKey()) return "future";
@@ -277,15 +284,16 @@ export function TaskDetailScreen() {
             ) {
               return "completed";
             }
-            return "missed";
+            return day === todayKey() ? "scheduled" : "missed";
           }}
           onMonthChange={(direction) =>
             setHistoryCursor((value) => addMonths(value, direction))
           }
         />
         <AppText variant="caption" muted>
-          Green dates are valid task days completed perfectly. Days outside this
-          task's schedule are not counted in streaks.
+          Each completed scheduled occurrence adds to your streak. Rest days do not
+          break it, and today stays open until midnight. Skipped or missed past
+          occurrences break the streak.
         </AppText>
       </Card>
 
@@ -307,7 +315,7 @@ export function TaskDetailScreen() {
       <ConfirmationDialog
         visible={confirm}
         title="Delete this task?"
-        message="This removes the task and its history on this device."
+        message="This permanently removes the task and its history from your account on all devices."
         onCancel={() => setConfirm(false)}
         onConfirm={() => {
           deleteTask(task.id);

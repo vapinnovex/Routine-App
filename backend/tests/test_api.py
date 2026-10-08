@@ -84,7 +84,7 @@ def test_atomic_snapshot_roundtrip_idempotency_and_conflict(client, account):
     }}
     data["profile"]["preferences"]["theme"] = "dark"
     data["history"] = [{"id": "history-1", "sessionId": "session-1", "sessionName": "Focus", "startedAt": "2026-09-12T01:00:00Z", "completedAt": "2026-09-12T01:01:00Z", "durationSeconds": 60, "completedSectionCount": 1}]
-    data["activeTimer"] = {"sessionId": "session-1", "sessionName": "Focus", "sections": session()["sections"], "currentIndex": 0, "status": "paused", "remainingMsWhenPaused": 30000, "startedAt": 1789185600000, "completedSectionCount": 0}
+    data["activeTimer"] = {"sessionId": "session-1", "sessionName": "Focus", "sections": session()["sections"], "currentIndex": 0, "status": "paused", "remainingMsWhenPaused": 30000, "accumulatedFocusMs": 30000, "focusCheckpointMs": None, "startedAt": 1789185600000, "completedSectionCount": 0}
     payload = {**before, "mutationId": "mutation-1"}
     response = client.put(PREFIX + "/users/me/data", json=payload)
     assert response.status_code == 200, response.text
@@ -98,6 +98,8 @@ def test_atomic_snapshot_roundtrip_idempotency_and_conflict(client, account):
     assert write(client, before).status_code == 409
     saved = state(client)["data"]
     assert saved["profile"]["preferences"]["theme"] == "dark"
+    assert saved["schemaVersion"] == 1
+    assert saved["activeTimer"]["accumulatedFocusMs"] == 30000
     assert saved["activeTimer"]["remainingMsWhenPaused"] == 30000
     assert len(saved["history"]) == 1
     assert saved["occurrences"]["task-1:2026-09-12"]["status"] == "completed"
@@ -161,3 +163,10 @@ def test_rate_limit(client):
         response = client.post(PREFIX + "/auth/login", json={"email": "missing@example.com", "password": "wrong"})
         assert response.status_code == 401
     assert client.post(PREFIX + "/auth/login", json={"email": "missing@example.com", "password": "wrong"}).status_code == 429
+
+
+def test_capabilities_keep_unreleased_features_disabled(client):
+    response = client.get('/api/v1/capabilities')
+    assert response.status_code == 200
+    assert response.json() == {"apiVersion": "v1", "accountSchemaVersion": 1,
+                               "dailyQuestions": False, "leaderboard": False}

@@ -58,6 +58,7 @@ interface TimerState {
   restart: () => void;
   end: () => void;
   clearLastCompleted: () => void;
+  repeatLast: () => ActiveTimerState | null;
   finishCompletedTimer: (completed: ActiveTimerState) => void;
   installSampleSessions: () => void;
   clearSessions: () => void;
@@ -68,7 +69,7 @@ function uniqueName(
   sessions: TimerSession[],
   ignoreId?: string,
 ): string {
-  const normalizedName = String(name ?? "").trim() || "Untitled session";
+  const normalizedName = String(name ?? "").trim().slice(0, 250) || "Untitled session";
   const existing = new Set(
     sessions
       .filter((session) => session.id !== ignoreId)
@@ -76,8 +77,9 @@ function uniqueName(
   );
   if (!existing.has(normalizedName.toLowerCase())) return normalizedName;
   let index = 2;
-  while (existing.has(`${normalizedName} ${index}`.toLowerCase())) index += 1;
-  return `${normalizedName} ${index}`;
+  const candidate = (number: number) => `${normalizedName.slice(0, 249 - String(number).length)} ${number}`;
+  while (existing.has(candidate(index).toLowerCase())) index += 1;
+  return candidate(index);
 }
 
 function toSections(
@@ -217,6 +219,8 @@ export const useTimerStore = create<TimerState>()(
         });
       },
       startSession: (id, taskId, taskDate) => {
+        get().tickCatchUp();
+        if (get().active) return get().active;
         const session = get().sessions.find((item) => item.id === id);
         if (!session || session.sections.length === 0) return null;
         const active = startTimer(
@@ -240,6 +244,8 @@ export const useTimerStore = create<TimerState>()(
         return active;
       },
       startQuickTimer: (durationSeconds) => {
+        get().tickCatchUp();
+        if (get().active) return get().active!;
         const sections: TimerSection[] = [
           {
             id: createId(),
@@ -278,6 +284,7 @@ export const useTimerStore = create<TimerState>()(
         const active = get().active;
         if (!active) return;
         const next = pauseTimer(active, Date.now());
+        if (next.status === "completed") { get().finishCompletedTimer(next); return; }
         set({ active: next });
         void syncNotifications(next);
       },
@@ -322,7 +329,18 @@ export const useTimerStore = create<TimerState>()(
         void cancelTimerNotifications();
       },
       clearLastCompleted: () => set({ lastCompleted: null }),
+      repeatLast: () => {
+        if (get().active) return get().active;
+        const last = get().lastCompleted;
+        if (!last) return null;
+        const active = startTimer(last.sessionId, last.sessionName, last.sections, Date.now(), last.taskId, last.taskDate);
+        set({ active, lastCompleted: null });
+        void syncNotifications(active);
+        return active;
+      },
       finishCompletedTimer: (completed) => {
+        if (completed.status !== "completed") return;
+        if (get().history.some((entry) => entry.sessionId === completed.sessionId && entry.startedAt === new Date(completed.startedAt).toISOString())) return;
         const completedAt = new Date().toISOString();
         const historyEntry: TimerHistoryEntry = {
           id: createId(),
@@ -332,10 +350,7 @@ export const useTimerStore = create<TimerState>()(
           taskDate: completed.taskDate,
           startedAt: new Date(completed.startedAt).toISOString(),
           completedAt,
-          durationSeconds: completed.sections.reduce(
-            (sum, section) => sum + section.durationSeconds,
-            0,
-          ),
+          durationSeconds: Math.floor((completed.accumulatedFocusMs ?? 0) / 1000),
           completedSectionCount: completed.completedSectionCount,
         };
         if (completed.taskId && completed.taskDate) {

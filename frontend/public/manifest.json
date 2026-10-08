@@ -6,9 +6,9 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "background_color": "#F4EFE8",
-  "theme_color": "#E05A33",
+  "theme_color": "#F4EFE8",
   "icons": [
     {
       "src": "/pwa-192.png",
@@ -22,5 +22,10 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "id": "/",
+  "categories": [
+    "productivity",
+    "lifestyle"
   ]
 }

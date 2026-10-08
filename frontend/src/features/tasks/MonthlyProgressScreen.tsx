@@ -1,3 +1,4 @@
+import { useTodayKey } from "@/hooks/useTodayKey";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
@@ -16,28 +17,35 @@ import { computeStatistics, focusInsights, monthStats } from "@/services/stats";
 import { useTaskStore } from "@/store/taskStore";
 import { useTimerStore } from "@/store/timerStore";
 import { useAppTheme } from "@/theme/ThemeProvider";
-import { addMonths, formatShortDate, todayKey } from "@/utils/dates";
+import { addMonths, formatShortDate, todayKey, toDateKey } from "@/utils/dates";
 
 export function MonthlyProgressScreen() {
   const { colors } = useAppTheme();
+  const today = useTodayKey();
   const tasks = useTaskStore((state) => state.tasks);
   const occurrences = useTaskStore((state) => state.occurrences);
   const timerHistory = useTimerStore((state) => state.history);
   const toggle = useTaskStore((state) => state.toggleTaskComplete);
+  const toggleSubtask = useTaskStore((state) => state.toggleSubtask);
   const [cursor, setCursor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(todayKey());
+  const changeMonth = (direction: -1 | 1) => {
+    const next = addMonths(cursor, direction);
+    setCursor(next);
+    setSelectedDate(toDateKey(next));
+  };
   const stats = useMemo(
     () =>
       monthStats(tasks, occurrences, cursor.getFullYear(), cursor.getMonth()),
-    [cursor, occurrences, tasks],
+    [cursor, occurrences, tasks, today],
   );
   const overall = useMemo(
     () => computeStatistics(tasks, occurrences),
-    [occurrences, tasks],
+    [occurrences, tasks, today],
   );
   const selectedItems = resolveForDate(tasks, occurrences, selectedDate);
   const hasCompletedActivity = stats.days.some((day) => day.completed > 0);
-  const focus = useMemo(() => focusInsights(timerHistory), [timerHistory]);
+  const focus = useMemo(() => focusInsights(timerHistory), [timerHistory, today]);
   const hourLabel =
     focus.bestFocusHour === null
       ? "—"
@@ -53,14 +61,14 @@ export function MonthlyProgressScreen() {
       </Pressable>
       <View style={styles.head}>
         <Pressable
-          onPress={() => setCursor((date) => addMonths(date, -1))}
+          onPress={() => changeMonth(-1)}
           accessibilityLabel="Previous month"
         >
           <AppText variant="heading">‹</AppText>
         </Pressable>
         <AppText variant="heading">{stats.monthLabel}</AppText>
         <Pressable
-          onPress={() => setCursor((date) => addMonths(date, 1))}
+          onPress={() => changeMonth(1)}
           accessibilityLabel="Next month"
         >
           <AppText variant="heading">›</AppText>
@@ -76,9 +84,7 @@ export function MonthlyProgressScreen() {
           days={stats.days}
           selected={selectedDate}
           onSelect={setSelectedDate}
-          onMonthChange={(direction) =>
-            setCursor((current) => addMonths(current, direction))
-          }
+          onMonthChange={changeMonth}
         />
         <AppText variant="subheading" style={{ marginTop: spacing.md }}>
           {formatShortDate(selectedDate)}
@@ -89,6 +95,7 @@ export function MonthlyProgressScreen() {
               key={item.task.id}
               item={item}
               onToggle={() => toggle(item.task.id, selectedDate)}
+              onSubtaskToggle={(id) => toggleSubtask(item.task.id, selectedDate, id)}
               onPress={() =>
                 router.push({
                   pathname: "/task/[id]",
@@ -113,7 +120,7 @@ export function MonthlyProgressScreen() {
         <>
           <Card style={{ marginTop: spacing.md, gap: spacing.sm }}>
             <AppText variant="caption" muted>
-              Overall completion
+              Completion through today
             </AppText>
             <AppText variant="display">{stats.overallCompletion}%</AppText>
             <ProgressBar value={stats.overallCompletion / 100} />
@@ -141,8 +148,9 @@ export function MonthlyProgressScreen() {
       )}
       <Card style={{ marginTop: spacing.md, gap: spacing.xs }}>
         <AppText variant="caption" muted>
-          All-time
+          All-time progress
         </AppText>
+        <AppText variant="caption" muted>Complete at least one task on each scheduled day. Rest days are neutral; today stays open until midnight.</AppText>
         <AppText>Current streak {overall.currentStreak} days</AppText>
         <AppText>Best streak {overall.bestStreak} days</AppText>
         <AppText>

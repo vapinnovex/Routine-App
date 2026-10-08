@@ -47,3 +47,21 @@ describe('timer engine', () => {
     expect(done.status).toBe('completed');
   });
 });
+
+it('measures activity time without breaks, pauses or skipped remaining time', () => {
+  let state = startTimer('s', 'Focus', sections, 1000);
+  state = pauseTimer(state, 11000); // 10 seconds activity
+  state = resumeTimer(state, 51000); // 40 seconds paused
+  state = skipSection(state, 56000); // 5 more activity, then skip 30 seconds
+  state = catchUpTimer(state, 116000); // 15 seconds break + 45 seconds activity
+  expect(state.status).toBe('completed');
+  expect(state.accumulatedFocusMs).toBe(60000);
+  expect(remainingMs(state, 116000)).toBe(0);
+});
+
+it('pause catches up sections before recording remaining time', () => {
+  const state = pauseTimer(startTimer('s', 'Focus', sections, 1000), 51000);
+  expect(state.currentIndex).toBe(1);
+  expect(state.remainingMsWhenPaused).toBe(10000);
+  expect(state.accumulatedFocusMs).toBe(45000);
+});

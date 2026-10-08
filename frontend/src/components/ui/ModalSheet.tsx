@@ -47,13 +47,18 @@ export function BottomSheet({
             {
               backgroundColor: colors.background,
               paddingBottom: Math.max(insets.bottom, spacing.lg),
-              marginBottom: spacing.xl,
+              marginBottom: 0,
               maxHeight: "76%",
             },
           ]}
         >
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
-          <AppText variant="heading">{title}</AppText>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <AppText variant="heading" style={{ flex: 1 }}>{title}</AppText>
+            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close dialog" style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}>
+              <AppText color={colors.primary}>Close</AppText>
+            </Pressable>
+          </View>
           <ScrollView
             contentContainerStyle={styles.content}
             keyboardShouldPersistTaps="handled"
@@ -72,6 +77,9 @@ const styles = StyleSheet.create({
   wrap: { flex: 1, justifyContent: "flex-end" },
   overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   sheet: {
+    width: "100%",
+    maxWidth: 600,
+    alignSelf: "center",
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     padding: spacing.xl,

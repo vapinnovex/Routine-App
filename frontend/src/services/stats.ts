@@ -1,10 +1,11 @@
-import { resolveForDate } from "@/services/occurrences";
+import { resolveForDate, resolveOccurrence, isOccurrenceComplete } from "@/services/occurrences";
 import { occursOnDate } from "@/services/recurrence";
 import type { Task, TaskOccurrence, TimerHistoryEntry } from "@/types/models";
 import {
     eachDateKey,
     parseDateKey,
     todayKey,
+    toDateKey,
     weekdayLabel,
 } from "@/utils/dates";
 import { percent } from "@/utils/format";
@@ -78,7 +79,7 @@ export function taskStreaks(
     if (!occursOnDate(task, date)) continue;
     const occurrence = occurrences[`${task.id}:${date}`];
     const done =
-      occurrence?.status === "completed" || occurrence?.parentManuallyCompleted;
+      Boolean(occurrence && isOccurrenceComplete(task, occurrence));
     if (done) {
       completed += 1;
       run += 1;
@@ -92,11 +93,10 @@ export function taskStreaks(
     if (!occursOnDate(task, date)) continue;
     const occurrence = occurrences[`${task.id}:${date}`];
     if (
-      occurrence?.status === "completed" ||
-      occurrence?.parentManuallyCompleted
+      occurrence && isOccurrenceComplete(task, occurrence)
     ) {
       current += 1;
-    } else {
+    } else if (date !== throughDate) {
       break;
     }
   }
@@ -117,15 +117,14 @@ export function taskMonthProgress(
     const occurrence = occurrences[`${task.id}:${date}`];
     const completed =
       valid &&
-      (occurrence?.status === "completed" ||
-        occurrence?.parentManuallyCompleted)
+      occurrence && isOccurrenceComplete(task, occurrence)
         ? 1
         : 0;
     return {
       date,
       total: valid ? 1 : 0,
       completed,
-      rate: valid ? completed : null,
+      rate: valid && date <= todayKey() ? completed : null,
     };
   });
 }
@@ -139,7 +138,13 @@ export function focusInsights(
     through.getMonth(),
     through.getDate(),
   ).getTime();
-  const startOfWeek = startOfToday - ((through.getDay() + 6) % 7) * 86_400_000;
+  const weekStart = new Date(startOfToday);
+  weekStart.setDate(weekStart.getDate() - ((through.getDay() + 6) % 7));
+  const startOfWeek = weekStart.getTime();
+  history = history.filter((entry) => {
+    const stamp = new Date(entry.startedAt).getTime();
+    return Number.isFinite(stamp) && stamp <= through.getTime();
+  });
   const startOfMonth = new Date(
     through.getFullYear(),
     through.getMonth(),
@@ -159,7 +164,7 @@ export function focusInsights(
     if (timestamp >= startOfToday) focusTodaySeconds += duration;
     if (timestamp >= startOfWeek) focusThisWeekSeconds += duration;
     if (timestamp >= startOfMonth) focusThisMonthSeconds += duration;
-    completedDays.add(startedAt.toISOString().slice(0, 10));
+    if (duration > 0) completedDays.add(toDateKey(startedAt));
     hourCounts.set(
       startedAt.getHours(),
       (hourCounts.get(startedAt.getHours()) ?? 0) + duration,
@@ -181,7 +186,7 @@ export function focusInsights(
   ).getTime();
   const activeDays = Math.max(
     1,
-    Math.floor((startOfToday - earliestDay) / 86_400_000) + 1,
+    eachDateKey(toDateKey(new Date(earliestDay)), toDateKey(through)).length,
   );
   const consistencyScore = Math.min(
     100,
@@ -214,21 +219,21 @@ function dayProgress(
 ): DayProgress {
   const resolved = resolveForDate(tasks, occurrences, date);
   const total = resolved.length;
-  const scheduledCompleted = resolved.filter((item) => item.isComplete).length;
-  const historicalCompleted = Object.values(occurrences).filter(
-    (occurrence) =>
-      occurrence.date === date &&
-      (occurrence.status === "completed" ||
-        occurrence.parentManuallyCompleted) &&
-      tasks.some((task) => task.id === occurrence.taskId),
-  ).length;
-  const completed = Math.max(scheduledCompleted, historicalCompleted);
-  return {
-    date,
-    total: Math.max(total, completed),
-    completed,
-    rate: total === 0 ? null : completed / total,
-  };
+  // Union by task ID: preserved history can overlap the current schedule.
+  const completedIds = new Set(resolved.filter((item) => item.isComplete).map((item) => item.task.id));
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  for (const occurrence of Object.values(occurrences)) {
+    const task = taskById.get(occurrence.taskId);
+    if (task && occurrence.date === date && isOccurrenceComplete(task, occurrence)) {
+      completedIds.add(task.id);
+    }
+  }
+  const scheduledIds = new Set(resolved.map((item) => item.task.id));
+  const adjustedTotal = total + [...completedIds].filter((id) => !scheduledIds.has(id)).length;
+  const completed = completedIds.size;
+  return { date, total: adjustedTotal, completed,
+    rate: adjustedTotal === 0 ? null : completed / adjustedTotal };
+
 }
 
 export function monthStats(
@@ -236,6 +241,7 @@ export function monthStats(
   occurrences: Record<string, TaskOccurrence>,
   year: number,
   monthIndex: number,
+  throughDate = todayKey(),
 ): MonthlyStats {
   const start = `${year}-${String(monthIndex + 1).padStart(2, "0")}-01`;
   const lastDate = new Date(year, monthIndex + 1, 0).getDate();
@@ -243,7 +249,11 @@ export function monthStats(
   const days = eachDateKey(start, end).map((date) =>
     dayProgress(tasks, occurrences, date),
   );
-  const countable = days.filter((day) => day.total > 0);
+  for (const day of days) {
+    if (day.date > throughDate) { day.completed = 0; day.rate = null; }
+  }
+  const elapsed = days.filter((day) => day.date <= throughDate);
+  const countable = elapsed.filter((day) => day.total > 0);
   const tasksTotal = countable.reduce((sum, day) => sum + day.total, 0);
   const tasksCompleted = countable.reduce((sum, day) => sum + day.completed, 0);
   const overallCompletion = percent(tasksCompleted, tasksTotal);
@@ -274,10 +284,10 @@ export function monthStats(
     overallCompletion,
     tasksCompleted,
     tasksTotal,
-    bestDay: bestDay?.date ?? null,
+    bestDay: bestDay && bestDay.completed > 0 ? bestDay.date : null,
     worstDay: worstDay?.date ?? null,
-    bestStreak: streakFromDays(days, false).best,
-    currentStreak: currentStreak(tasks, occurrences),
+    bestStreak: streakFromDays(elapsed, false).best,
+    currentStreak: currentStreak(tasks, occurrences, throughDate),
     days,
   };
 }
@@ -321,7 +331,8 @@ export function currentStreak(
   const days = eachDateKey(earliest, throughDate).map((date) =>
     dayProgress(tasks, occurrences, date),
   );
-  return streakFromDays(days, true).current;
+  // Today is still in progress. A missed scheduled day breaks the run only after it ends.
+  return streakFromDays(days.filter((day) => day.date !== throughDate || day.completed > 0), true).current;
 }
 
 export function bestStreak(
@@ -375,6 +386,13 @@ export function computeStatistics(
 
   for (const date of dates) {
     const resolved = resolveForDate(tasks, occurrences, date);
+    const included = new Set(resolved.map((item) => item.task.id));
+    for (const task of tasks) {
+      const occurrence = occurrences[`${task.id}:${date}`];
+      if (!included.has(task.id) && occurrence && isOccurrenceComplete(task, occurrence)) {
+        resolved.push(resolveOccurrence(task, date, occurrence));
+      }
+    }
     const weekday = parseDateKey(date).getDay();
     const isPast = date < throughDate;
     for (const item of resolved) {
@@ -427,7 +445,8 @@ export function computeStatistics(
     bestStreak: bestStreak(tasks, occurrences, throughDate),
     mostProductiveDay:
       bestDayIndex === null ? null : weekdayLabel(bestDayIndex, true),
-    mostCompletedCategory: categoryRates[0]?.category ?? null,
+    mostCompletedCategory: [...categoryRates].filter((item) => item.completed > 0)
+      .sort((a, b) => b.completed - a.completed || b.rate - a.rate)[0]?.category ?? null,
     missedTasks: missed,
     categoryRates,
   };

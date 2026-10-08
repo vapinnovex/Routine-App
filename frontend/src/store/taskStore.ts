@@ -1,3 +1,4 @@
+import { useTodayKey } from "@/hooks/useTodayKey";
 import { create } from "zustand";
 
 import { scheduleTaskNotifications } from "@/services/notifications";
@@ -9,6 +10,7 @@ import {
     resolveForDate,
     resolveOccurrence,
 } from "@/services/occurrences";
+import { occursOnDate } from "@/services/recurrence";
 import { buildSampleTasks } from "@/services/sampleData";
 import { useUserStore } from "@/store/userStore";
 import type {
@@ -108,19 +110,21 @@ export const useTaskStore = create<TaskState>()(
             })),
         };
         set({ tasks: [task, ...get().tasks], hasUserChanges: true });
-        syncTaskNotifications([task, ...get().tasks]);
+        syncTaskNotifications(get().tasks);
         return task;
       },
       updateTask: (id, input) => {
         const tasks = get().tasks.map((task) => {
           if (task.id !== id) return task;
+          const unused = new Set(task.subtasks.map((step) => step.id));
           const subtasks =
             input.subtasks !== undefined
               ? input.subtasks
                   .map((title) => title.trim())
                   .filter(Boolean)
-                  .map((title, index) => {
-                    const existing = task.subtasks[index];
+                  .map((title) => {
+                    const existing = task.subtasks.find((step) => step.title === title && unused.has(step.id));
+                    if (existing) unused.delete(existing.id);
                     return {
                       id: existing?.id ?? createId(),
                       title,
@@ -195,7 +199,7 @@ export const useTaskStore = create<TaskState>()(
       toggleTaskComplete: (taskId, date) => {
         if (date > todayKey()) return;
         const task = get().tasks.find((item) => item.id === taskId);
-        if (!task) return;
+        if (!task || task.archived || !occursOnDate(task, date)) return;
         const id = occurrenceId(taskId, date);
         const current = get().occurrences[id] ?? emptyOccurrence(task, date);
         const resolved = resolveOccurrence(task, date, current);
@@ -213,7 +217,7 @@ export const useTaskStore = create<TaskState>()(
       toggleSubtask: (taskId, date, subtaskId) => {
         if (date > todayKey()) return;
         const task = get().tasks.find((item) => item.id === taskId);
-        if (!task) return;
+        if (!task || task.archived || !occursOnDate(task, date)) return;
         const id = occurrenceId(taskId, date);
         const current = get().occurrences[id] ?? emptyOccurrence(task, date);
         const resolved = resolveOccurrence(task, date, current);
@@ -234,7 +238,7 @@ export const useTaskStore = create<TaskState>()(
       skipTask: (taskId, date) => {
         if (date > todayKey()) return;
         const task = get().tasks.find((item) => item.id === taskId);
-        if (!task) return;
+        if (!task || task.archived || !occursOnDate(task, date)) return;
         const id = occurrenceId(taskId, date);
         const current = get().occurrences[id] ?? emptyOccurrence(task, date);
         set({
@@ -318,9 +322,10 @@ export const useTaskStore = create<TaskState>()(
 );
 
 export function useTodayProgress() {
+  const today = useTodayKey();
   const tasks = useTaskStore((state) => state.tasks);
   const occurrences = useTaskStore((state) => state.occurrences);
-  const items = resolveForDate(tasks, occurrences, todayKey());
+  const items = resolveForDate(tasks, occurrences, today);
   const completed = items.filter((item) => item.isComplete).length;
   return { items, completed, total: items.length };
 }

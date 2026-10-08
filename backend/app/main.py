@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from pymongo.errors import PyMongoError
 
 from app.api import auth, resources, users
+from app.schemas.challenges import Capabilities
 from app.core.config import Settings, get_settings
 from app.core.database import connect_database
 
@@ -43,9 +44,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return response
 
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True,
-                       allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-                       allow_headers=["Authorization", "Content-Type", "If-Match", "X-Routine-Client"],
-                       expose_headers=["ETag", "Retry-After"])
+                    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+                    allow_headers=["Authorization", "Content-Type", "If-Match", "X-Routine-Client"],
+                    expose_headers=["ETag", "Retry-After"])
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
@@ -58,6 +59,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def database_error(request, exc):
         logging.getLogger(__name__).error("Database request failed: %s", type(exc).__name__)
         return JSONResponse(status_code=503, content={"detail": "Database unavailable. Please try again."})
+
+    @app.get("/api/v1/capabilities", response_model=Capabilities, tags=["Platform"])
+    async def capabilities():
+        return Capabilities()
 
     @app.get("/api/v1/health", tags=["Health"])
     async def health(request: Request):

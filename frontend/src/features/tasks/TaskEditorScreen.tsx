@@ -12,7 +12,7 @@ import {
 import DraggableFlatList, {
     ScaleDecorator,
     type RenderItemParams,
-} from "react-native-draggable-flatlist";
+} from "@/components/ui/ReorderableList";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -99,18 +99,26 @@ export function TaskEditorScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const recurrence = useMemo<RecurrenceRule>(() => {
-    if (frequency === "weekdays") return { frequency, weekdays };
+    const endDate = existing?.recurrence.endDate;
+    if (frequency === "weekdays") return { frequency, weekdays, endDate };
     if (frequency === "custom" || frequency === "daily") {
-      return { frequency, interval: Math.max(1, Number(interval) || 1) };
+      return { frequency, interval: Math.max(1, Number(interval) || 1), endDate };
     }
-    return { frequency };
-  }, [frequency, interval, weekdays]);
+    return { frequency, interval: existing?.recurrence.interval, endDate };
+  }, [frequency, interval, weekdays, existing]);
 
   const save = () => {
     if (!title.trim()) {
       setError("Give this task a name.");
       return;
     }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || toDateKey(parseDateKey(date)) !== date) { setError("Enter a valid date as YYYY-MM-DD."); return; }
+    if (hasTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) { setError("Enter a valid time as HH:MM (24-hour)."); return; }
+    if (frequency === "weekdays" && weekdays.length === 0) { setError("Choose at least one weekday."); return; }
+    if (["custom", "daily"].includes(frequency) && (!Number.isInteger(Number(interval)) || Number(interval) < 1 || Number(interval) > 365)) { setError("Repeat interval must be a whole number from 1 to 365."); return; }
+    if (estimatedDuration.trim() && (!Number.isInteger(Number(estimatedDuration)) || Number(estimatedDuration) < 1 || Number(estimatedDuration) > 525600)) { setError("Estimated minutes must be a whole number from 1 to 525600."); return; }
+    if (subtasks.split("\n").filter(Boolean).length > 200) { setError("Use at most 200 subtasks."); return; }
+    if (recurrence.endDate && recurrence.endDate < date) { setError("Start date cannot be after the repeat end date."); return; }
     const payload = {
       title,
       category,
@@ -160,7 +168,9 @@ export function TaskEditorScreen() {
         Task name
       </AppText>
       <TextInput
-        value={title}
+        maxLength={250}
+          accessibilityLabel="Name"
+          value={title}
         onChangeText={(value) => {
           setTitle(value);
           setError(null);
@@ -214,13 +224,8 @@ export function TaskEditorScreen() {
             Date
           </AppText>
           {Platform.OS === "web" ? (
-            <TextInput
-              value={date}
-              onChangeText={setDate}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.textSecondary}
-              style={[styles.inlineInput, { color: colors.textPrimary }]}
-            />
+            <input type="date" aria-label="Task date" value={date} onChange={(event) => setDate(event.target.value)}
+              style={{ width: "100%", minHeight: 44, fontSize: 16, color: colors.textPrimary, background: colors.surface, border: 0, colorScheme: scheme }} />
           ) : (
             <AppText>{date}</AppText>
           )}
@@ -251,14 +256,8 @@ export function TaskEditorScreen() {
         {hasTime ? (
           <Pressable onPress={() => setShowTime(true)}>
             {Platform.OS === "web" ? (
-              <TextInput
-                value={time}
-                onChangeText={setTime}
-                placeholder="HH:MM"
-                placeholderTextColor={colors.textSecondary}
-                keyboardType="numbers-and-punctuation"
-                style={[styles.inlineInput, { color: colors.textPrimary }]}
-              />
+              <input type="time" aria-label="Task time" value={time} onChange={(event) => setTime(event.target.value)}
+                style={{ width: "100%", minHeight: 44, fontSize: 16, color: colors.textPrimary, background: colors.surface, border: 0, colorScheme: scheme }} />
             ) : (
               <AppText>{time}</AppText>
             )}
@@ -499,6 +498,7 @@ export function TaskEditorScreen() {
           ) : null}
         </View>
         <DraggableFlatList
+        reordering={reorderingSubtasks}
           data={subtasks.split("\n").filter(Boolean)}
           keyExtractor={(item, index) => `${item}-${index}`}
           scrollEnabled={false}
@@ -538,7 +538,9 @@ export function TaskEditorScreen() {
         />
         <View style={styles.subtaskInputRow}>
           <TextInput
-            value={newSubtask}
+            maxLength={250}
+          accessibilityLabel="New subtask"
+          value={newSubtask}
             onChangeText={setNewSubtask}
             onSubmitEditing={addSubtask}
             returnKeyType="done"

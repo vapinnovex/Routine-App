@@ -6,7 +6,7 @@ import { AppText } from "@/components/ui/Text";
 import { radius, spacing } from "@/constants/theme";
 import type { DayProgress } from "@/services/stats";
 import { useAppTheme } from "@/theme/ThemeProvider";
-import { daysInMonth, parseDateKey, weekdayLabel } from "@/utils/dates";
+import { daysInMonth, parseDateKey, weekdayLabel, todayKey } from "@/utils/dates";
 
 function tone(
   day: DayProgress | undefined,
@@ -14,6 +14,7 @@ function tone(
   colors: ReturnType<typeof useAppTheme>["colors"],
 ) {
   if (!day || day.total === 0) return { bg: empty, label: "No tasks" };
+  if (day.date > todayKey()) return { bg: colors.border, label: "Scheduled in the future" };
   if (day.rate === 1) return { bg: colors.success, label: "Completed" };
   if ((day.rate ?? 0) > 0) return { bg: colors.warning, label: "Partial" };
   return { bg: colors.border, label: "Not started" };
@@ -98,6 +99,8 @@ export function MonthCalendar({
           return (
             <Pressable
               key={cell.key}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isSelected, disabled: !cell.date }}
               disabled={!cell.date}
               onPress={() => cell.date && onSelect(cell.date)}
               style={[

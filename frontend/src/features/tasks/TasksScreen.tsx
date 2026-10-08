@@ -1,8 +1,8 @@
+import { useTodayKey } from "@/hooks/useTodayKey";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
-import { Heatmap } from "@/components/tasks/Heatmap";
 import { MonthCalendar } from "@/components/tasks/MonthCalendar";
 import { TaskRow } from "@/components/tasks/TaskRow";
 import { Card } from "@/components/ui/Card";
@@ -14,13 +14,14 @@ import { AppText } from "@/components/ui/Text";
 import { spacing } from "@/constants/theme";
 import { successHaptic } from "@/services/feedback";
 import { resolveForDate } from "@/services/occurrences";
+import { describeRecurrence, occursOnDate } from "@/services/recurrence";
 import { monthStats } from "@/services/stats";
 import { useTaskStore } from "@/store/taskStore";
 import { usePreferences } from "@/store/userStore";
 import { useAppTheme } from "@/theme/ThemeProvider";
-import { formatShortDate, todayKey } from "@/utils/dates";
+import { formatShortDate, formatMonthYear, todayKey } from "@/utils/dates";
 
-type Tab = "today" | "overview" | "calendar";
+type Tab = "today" | "all" | "calendar";
 
 export function TasksScreen() {
   const { colors } = useAppTheme();
@@ -30,7 +31,9 @@ export function TasksScreen() {
   const toggle = useTaskStore((state) => state.toggleTaskComplete);
   const toggleSubtask = useTaskStore((state) => state.toggleSubtask);
   const [tab, setTab] = useState<Tab>("today");
-  const today = todayKey();
+  const [query, setQuery] = useState("");
+  const matchingTasks = tasks.filter((task) => !task.archived && `${task.title} ${task.category ?? ""}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const today = useTodayKey();
   const [calendarCursor, setCalendarCursor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(today);
   const stats = useMemo(
@@ -41,7 +44,7 @@ export function TasksScreen() {
         calendarCursor.getFullYear(),
         calendarCursor.getMonth(),
       ),
-    [calendarCursor, occurrences, tasks],
+    [calendarCursor, occurrences, tasks, today],
   );
   const todayItems = resolveForDate(tasks, occurrences, today);
   const calendarItems = resolveForDate(tasks, occurrences, selectedDate);
@@ -57,20 +60,11 @@ export function TasksScreen() {
     });
     return counts;
   }, [occurrences]);
-  const focusItems = useMemo(
-    () =>
-      [...todayItems]
-        .filter((item) => !item.isComplete && !item.isSkipped)
-        .sort((a, b) => {
-          const rank = { high: 0, medium: 1, low: 2 };
-          return (
-            rank[a.task.priority ?? "medium"] -
-            rank[b.task.priority ?? "medium"]
-          );
-        })
-        .slice(0, 3),
-    [todayItems],
-  );
+  const changeMonth = (direction: -1 | 1) => {
+    const next = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() + direction, 1);
+    setCalendarCursor(next);
+    setSelectedDate(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`);
+  };
   const onToggle = (taskId: string, date: string) => {
     toggle(taskId, date);
     void successHaptic(preferences);
@@ -116,7 +110,7 @@ export function TasksScreen() {
         onChange={setTab}
         options={[
           { value: "today", label: "Today" },
-          { value: "overview", label: "Overview" },
+          { value: "all", label: "All tasks" },
           { value: "calendar", label: "Calendar" },
         ]}
       />
@@ -134,31 +128,33 @@ export function TasksScreen() {
           />
         )
       ) : null}
-      {tab === "overview" ? (
-        <View style={{ marginTop: spacing.md, gap: spacing.md }}>
-          <Card style={{ gap: spacing.xs }}>
-            <AppText variant="subheading">Your month at a glance</AppText>
-            <AppText muted>
-              {stats.overallCompletion}% complete · {stats.currentStreak} day
-              current streak
-            </AppText>
-            <Heatmap days={stats.days} />
-          </Card>
-          <Card style={{ gap: spacing.sm }}>
-            <AppText variant="subheading">Top 3 for today</AppText>
-            {focusItems.length ? (
-              focusItems.map((item, index) => row(item, today, index))
-            ) : (
-              <AppText muted>
-                Everything important is handled for today.
-              </AppText>
-            )}
-          </Card>
+      {tab === "all" ? (
+        <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+          <TextInput value={query} onChangeText={setQuery} accessibilityLabel="Search tasks"
+            placeholder="Search tasks or categories" placeholderTextColor={colors.textSecondary}
+            style={{ minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 12, color: colors.textPrimary, backgroundColor: colors.surface, fontSize: 16 }} />
+          <AppText variant="caption" muted>{matchingTasks.length} {matchingTasks.length === 1 ? "task" : "tasks"} · Includes past and upcoming routines</AppText>
+          {matchingTasks.map((task) => <Pressable key={task.id} accessibilityRole="button" accessibilityLabel={`Open ${task.title}`}
+            onPress={() => router.push({ pathname: "/task/[id]", params: { id: task.id, date: occursOnDate(task, today) ? today : task.date } })}>
+            <Card style={{ gap: spacing.xs }}>
+              <AppText variant="subheading">{task.title}</AppText>
+              <AppText muted>{describeRecurrence(task.recurrence, task.date)} · {task.category ?? "Uncategorized"}</AppText>
+              <AppText variant="caption" color={colors.primary}>{formatShortDate(task.date)} · View task →</AppText>
+            </Card>
+          </Pressable>)}
+          {matchingTasks.length === 0 && <EmptyState title={query ? "No matching tasks" : "Your routines start here"}
+            body={query ? "Try a different name or category." : "Add a task to plan your day."}
+            actionLabel={query ? "Clear search" : "Add task"} onAction={() => query ? setQuery("") : router.push("/task/edit")} />}
         </View>
       ) : null}
       {tab === "calendar" ? (
         <View style={{ marginTop: spacing.md, gap: spacing.md }}>
           <Card>
+            <View style={styles.head}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Previous month" onPress={() => changeMonth(-1)} style={{ minWidth: 44, minHeight: 44, justifyContent: "center" }}><AppText variant="heading">‹</AppText></Pressable>
+              <AppText variant="subheading">{formatMonthYear(calendarCursor)}</AppText>
+              <Pressable accessibilityRole="button" accessibilityLabel="Next month" onPress={() => changeMonth(1)} style={{ minWidth: 44, minHeight: 44, alignItems: "flex-end", justifyContent: "center" }}><AppText variant="heading">›</AppText></Pressable>
+            </View>
             <AppText variant="subheading">
               {formatShortDate(selectedDate)}
             </AppText>
@@ -173,17 +169,7 @@ export function TasksScreen() {
               days={stats.days}
               selected={selectedDate}
               onSelect={setSelectedDate}
-              onMonthChange={(direction) => {
-                const next = new Date(
-                  calendarCursor.getFullYear(),
-                  calendarCursor.getMonth() + direction,
-                  1,
-                );
-                setCalendarCursor(next);
-                setSelectedDate(
-                  `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-01`,
-                );
-              }}
+              onMonthChange={changeMonth}
             />
           </Card>
           {calendarItems.length ? (

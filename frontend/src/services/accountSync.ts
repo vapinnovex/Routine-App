@@ -11,6 +11,7 @@ import type { ActiveTimerState, Task, TaskOccurrence, TimerHistoryEntry, TimerSe
 import { createId } from "@/utils/id";
 
 export interface AccountData {
+  schemaVersion?: 1;
   profile: Pick<UserProfile, "name" | "onboardingComplete" | "sampleDataInstalled" | "preferences">;
   tasks: Task[];
   occurrences: Record<string, TaskOccurrence>;
@@ -39,6 +40,7 @@ export function accountSnapshot(): AccountData {
   const tasks = useTaskStore.getState();
   const timer = useTimerStore.getState();
   return {
+    schemaVersion: 1,
     profile: { name: user.name, onboardingComplete: user.onboardingComplete,
       sampleDataInstalled: user.sampleDataInstalled, preferences: user.preferences },
     tasks: tasks.tasks, occurrences: tasks.occurrences, sessions: timer.sessions,
@@ -168,9 +170,15 @@ export async function signIn(mode: "login" | "register", email: string, password
   });
   if (Platform.OS !== "web") setAccessToken(result.accessToken);
   await saveSession(result.accessToken);
-  const data = await api<Envelope>("/users/me/data");
-  epoch += 1;
-  applyData(data, result.user);
+  try {
+    const data = await api<Envelope>("/users/me/data");
+    epoch += 1;
+    applyData(data, result.user);
+  } catch (error) {
+    useConnectionStore.setState({ ready: false });
+    reportError(error);
+    throw error;
+  }
 }
 
 export async function signOut() {

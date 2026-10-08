@@ -95,6 +95,10 @@ class Task(Model):
     def valid_subtasks(self):
         if len({s.id for s in self.subtasks}) != len(self.subtasks):
             raise ValueError("Subtask IDs must be unique")
+        if self.recurrence.endDate and self.recurrence.endDate < self.date:
+            raise ValueError("Repeat end date must not precede the start date")
+        if self.recurrence.frequency == "weekdays" and not self.recurrence.weekdays:
+            raise ValueError("Select at least one weekday")
         return self
 
 
@@ -148,6 +152,8 @@ class TimerSession(Model):
 
 
 class ActiveTimer(Model):
+    accumulatedFocusMs: int = Field(default=0, ge=0)
+    focusCheckpointMs: int | None = Field(default=None, ge=0)
     sessionId: Identifier
     sessionName: Title
     sections: list[TimerSection] = Field(min_length=1, max_length=200)
@@ -188,6 +194,7 @@ class HistoryEntry(Model):
 
 
 class AppData(Model):
+    schemaVersion: Literal[1] = 1
     profile: ProfileData
     tasks: list[Task] = Field(default_factory=list, max_length=2000)
     occurrences: dict[Identifier, Occurrence] = Field(default_factory=dict)

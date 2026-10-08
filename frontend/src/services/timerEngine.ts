@@ -8,6 +8,7 @@ export function totalDurationSeconds(sections: TimerSection[]): number {
 }
 
 export function remainingMs(state: ActiveTimerState, now: number): number {
+  if (state.status === "completed") return 0;
   if (state.status === "paused") {
     return Math.max(0, state.remainingMsWhenPaused ?? 0);
   }
@@ -28,33 +29,31 @@ export function catchUpTimer(
 ): ActiveTimerState {
   if (state.status !== "running" || !state.sectionEndsAt) return state;
 
-  let currentIndex = state.currentIndex;
-  let sectionEndsAt = state.sectionEndsAt;
-  let completedSectionCount = state.completedSectionCount;
-
-  while (now >= sectionEndsAt) {
-    completedSectionCount = Math.max(completedSectionCount, currentIndex + 1);
-    if (currentIndex >= state.sections.length - 1) {
-      return {
-        ...state,
-        currentIndex,
-        sectionEndsAt: null,
-        remainingMsWhenPaused: 0,
-        status: "completed",
-        completedSectionCount: state.sections.length,
-      };
+  let next = state;
+  while (next.sectionEndsAt !== null && now >= next.sectionEndsAt) {
+    const boundary = next.sectionEndsAt;
+    next = settleFocus(next, boundary);
+    if (next.currentIndex >= next.sections.length - 1) {
+      return { ...next, sectionEndsAt: null, focusCheckpointMs: null,
+        remainingMsWhenPaused: 0, status: "completed", completedSectionCount: next.sections.length };
     }
-    currentIndex += 1;
-    const next = state.sections[currentIndex];
-    sectionEndsAt += Math.max(1, next.durationSeconds) * 1000;
+    const currentIndex = next.currentIndex + 1;
+    next = { ...next, currentIndex, completedSectionCount: currentIndex,
+      focusCheckpointMs: boundary,
+      sectionEndsAt: boundary + Math.max(1, next.sections[currentIndex].durationSeconds) * 1000 };
   }
+  return next;
 
-  return {
-    ...state,
-    currentIndex,
-    sectionEndsAt,
-    completedSectionCount,
-  };
+}
+
+function settleFocus(state: ActiveTimerState, now: number): ActiveTimerState {
+  if (state.status !== "running" || state.sectionEndsAt === null) return state;
+  const section = state.sections[state.currentIndex];
+  const checkpoint = state.focusCheckpointMs ?? state.sectionEndsAt - section.durationSeconds * 1000;
+  const until = Math.min(now, state.sectionEndsAt);
+  const elapsed = Math.max(0, until - checkpoint);
+  return { ...state, focusCheckpointMs: until,
+    accumulatedFocusMs: (state.accumulatedFocusMs ?? 0) + (section.type === "activity" ? elapsed : 0) };
 }
 
 export function startTimer(
@@ -68,6 +67,8 @@ export function startTimer(
   const ordered = [...sections].sort((a, b) => a.order - b.order);
   const first = ordered[0];
   return {
+    accumulatedFocusMs: 0,
+    focusCheckpointMs: now,
     sessionId,
     sessionName,
     sections: ordered,
@@ -87,9 +88,13 @@ export function pauseTimer(
   now: number,
 ): ActiveTimerState {
   if (state.status !== "running") return state;
+  state = catchUpTimer(state, now);
+  if (state.status === "completed") return state;
+  state = settleFocus(state, now);
   return {
     ...state,
     status: "paused",
+    focusCheckpointMs: null,
     remainingMsWhenPaused: remainingMs(state, now),
     sectionEndsAt: null,
   };
@@ -110,6 +115,7 @@ export function resumeTimer(
   return {
     ...state,
     status: "running",
+    focusCheckpointMs: now,
     sectionEndsAt: now + remaining,
     remainingMsWhenPaused: null,
   };
@@ -119,7 +125,9 @@ export function skipSection(
   state: ActiveTimerState,
   now: number,
 ): ActiveTimerState {
+  state = catchUpTimer(state, now);
   if (state.status === "completed") return state;
+  state = settleFocus(state, now);
   const completedSectionCount = Math.max(
     state.completedSectionCount,
     state.currentIndex + 1,
@@ -138,6 +146,7 @@ export function skipSection(
   return {
     ...state,
     currentIndex: nextIndex,
+    focusCheckpointMs: now,
     status: "running",
     sectionEndsAt: now + Math.max(1, next.durationSeconds) * 1000,
     remainingMsWhenPaused: null,
@@ -149,11 +158,13 @@ export function previousSection(
   state: ActiveTimerState,
   now: number,
 ): ActiveTimerState {
+  state = settleFocus(state, now);
   if (state.currentIndex === 0) {
     const first = state.sections[0];
     return {
       ...state,
       status: "running",
+      focusCheckpointMs: now,
       sectionEndsAt: now + Math.max(1, first.durationSeconds) * 1000,
       remainingMsWhenPaused: null,
     };
@@ -163,6 +174,7 @@ export function previousSection(
   return {
     ...state,
     currentIndex: nextIndex,
+    focusCheckpointMs: now,
     status: "running",
     sectionEndsAt: now + Math.max(1, section.durationSeconds) * 1000,
     remainingMsWhenPaused: null,

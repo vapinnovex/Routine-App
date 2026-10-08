@@ -142,3 +142,27 @@ test('refresh cannot discard edits made while its response is in flight', async 
   await flushChanges();
   expect(useTaskStore.getState().tasks).toHaveLength(1);
 });
+
+test('reordering and removing subtasks preserves completion identity', async () => {
+  const task = useTaskStore.getState().createTask({ title: 'Steps', category: null, date: '2026-09-12', time: null, recurrence: { frequency: 'daily' }, subtasks: ['A', 'B'] });
+  useTaskStore.getState().toggleSubtask(task.id, task.date, task.subtasks[1].id);
+  useTaskStore.getState().updateTask(task.id, { subtasks: ['B', 'A'] });
+  expect(useTaskStore.getState().tasks[0].subtasks[0].id).toBe(task.subtasks[1].id);
+  useTaskStore.getState().updateTask(task.id, { subtasks: ['B'] });
+  expect(useTaskStore.getState().tasks[0].subtasks[0].id).toBe(task.subtasks[1].id);
+  await flushChanges();
+  expect(server.data.occurrences[`${task.id}:${task.date}`].subtaskCompletions[task.subtasks[1].id].completed).toBe(true);
+});
+
+test('does not silently replace an active timer and can repeat a quick timer', async () => {
+  const first = useTimerStore.getState().startQuickTimer(60);
+  expect(useTimerStore.getState().startQuickTimer(300)).toEqual(first);
+  const done = { ...first, status: 'completed' as const, completedSectionCount: 1 };
+  useTimerStore.getState().finishCompletedTimer(done);
+  useTimerStore.getState().finishCompletedTimer(done);
+  expect(useTimerStore.getState().history).toHaveLength(1);
+  const repeated = useTimerStore.getState().repeatLast();
+  expect(repeated?.sections[0].durationSeconds).toBe(60);
+  expect(repeated?.status).toBe('running');
+  await flushChanges();
+});

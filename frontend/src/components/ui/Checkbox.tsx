@@ -23,7 +23,7 @@ export function Checkbox({
       disabled={disabled}
       hitSlop={8}
       accessibilityRole="checkbox"
-      accessibilityState={{ checked }}
+      accessibilityState={{ checked, disabled }}
       accessibilityLabel={label}
       style={[
         styles.box,

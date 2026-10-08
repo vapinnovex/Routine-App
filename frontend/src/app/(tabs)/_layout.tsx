@@ -1,3 +1,5 @@
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useWindowDimensions } from "react-native";
 import { Tabs } from "expo-router/js-tabs";
 
 import { Icon } from "@/components/ui/Icon";
@@ -5,6 +7,9 @@ import { useAppTheme } from "@/theme/ThemeProvider";
 
 export default function TabLayout() {
   const { colors } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const side = Math.max(12, (width - 856) / 2);
 
   return (
     <Tabs
@@ -14,9 +19,9 @@ export default function TabLayout() {
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarStyle: {
           position: "absolute",
-          left: 12,
-          right: 12,
-          bottom: 12,
+          left: side,
+          right: side,
+          bottom: Math.max(12, insets.bottom),
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
           height: 68,

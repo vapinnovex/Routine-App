@@ -1,3 +1,4 @@
+import { InstallApp } from "@/components/InstallApp";
 import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
@@ -27,6 +28,7 @@ import { percent } from "@/utils/format";
 
 export function HomeScreen() {
   const { colors } = useAppTheme();
+  const activeTimer = useTimerStore((state) => state.active);
   const greeting = useGreeting();
   const preferences = usePreferences();
   const { items, completed, total } = useTodayProgress();
@@ -80,6 +82,7 @@ export function HomeScreen() {
 
   return (
     <Screen>
+      <InstallApp />
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <AppText variant="heading">{greeting.title}</AppText>
@@ -131,9 +134,9 @@ export function HomeScreen() {
           style={{ flex: 1 }}
         />
         <Button
-          label="Start Timer"
+          label={activeTimer ? "Resume timer" : "Start Timer"}
           variant="secondary"
-          onPress={() => setTimerOpen(true)}
+          onPress={() => activeTimer ? router.push("/session/run") : setTimerOpen(true)}
           icon={<Icon name="play" color={colors.textPrimary} size={16} />}
           style={{ flex: 1 }}
         />
@@ -188,6 +191,7 @@ export function HomeScreen() {
         </Card>
       )}
 
+
       <BottomSheet
         visible={quickOpen}
         title="Quick task"
@@ -195,6 +199,8 @@ export function HomeScreen() {
       >
         <AppText muted>What do you need to do?</AppText>
         <TextInput
+          maxLength={250}
+          accessibilityLabel="Task name"
           value={quickTitle}
           onChangeText={setQuickTitle}
           placeholder="Morning workout"

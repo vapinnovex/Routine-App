@@ -51,10 +51,11 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "web:export": "expo export --platform web",
-    "web:serve": "npx serve dist",
+    "web:export": "expo export --platform web --clear",
+    "web:serve": "npx serve dist -s -l 8081",
     "test": "jest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postweb:export": "node scripts/stamp-pwa.cjs"
   },
   "private": true
 }

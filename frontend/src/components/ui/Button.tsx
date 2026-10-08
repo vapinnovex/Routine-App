@@ -32,6 +32,7 @@ export function Button({ label, variant = 'primary', icon, style, disabled, ...r
       accessibilityRole="button"
       accessibilityLabel={label}
       disabled={disabled}
+      accessibilityState={{ disabled: Boolean(disabled) }}
       style={({ pressed }) => [
         styles.base,
         { backgroundColor: background, opacity: disabled ? 0.45 : pressed ? 0.86 : 1 },
@@ -42,7 +43,7 @@ export function Button({ label, variant = 'primary', icon, style, disabled, ...r
     >
       <View style={styles.row}>
         {icon}
-        <AppText style={[typography.button, { color: textColor }]}>{label}</AppText>
+        <AppText style={[typography.button, { color: textColor, textAlign: 'center', flexShrink: 1 }]}>{label}</AppText>
       </View>
     </Pressable>
   );

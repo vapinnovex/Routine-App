@@ -1,7 +1,7 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, type ReactNode } from "react";
-import { AppState, View } from "react-native";
+import { AppState, Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -56,6 +56,7 @@ function AppEffects() {
   const { scheme } = useAppTheme();
 
   useEffect(() => {
+    if (Platform.OS === "web") return;
     let responseSubscription: { remove: () => void } | null = null;
     void configureNotifications().then(async () => {
       if (typeof window === "undefined" && process.env.JEST_WORKER_ID) return;
@@ -95,6 +96,7 @@ function AppEffects() {
   }, []);
 
   useEffect(() => {
+    const timer = setInterval(() => useTimerStore.getState().tickCatchUp(), 1000);
     const sub = AppState.addEventListener("change", (status) => {
       if (status !== "active") {
         useTimerStore.getState().tickCatchUp();
@@ -107,7 +109,7 @@ function AppEffects() {
         }
       }
     });
-    return () => sub.remove();
+    return () => { clearInterval(timer); sub.remove(); };
   }, []);
 
   return <StatusBar style={scheme === "dark" ? "light" : "dark"} />;

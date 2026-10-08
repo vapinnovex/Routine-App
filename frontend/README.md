@@ -107,7 +107,7 @@ npx expo run:android
 | `react-native-svg`                                     | Icons and progress ring                                   |
 | `expo-haptics`                                         | Completion feedback                                       |
 | `expo-notifications`                                   | Local timer section notifications                         |
-| `expo-av`                                              | Section-complete chime                                    |
+| `expo-audio`                                              | Section-complete chime                                    |
 | `expo-keep-awake`                                      | Keep the screen on during a running session               |
 | `expo-file-system` / `expo-sharing` / `expo-clipboard` | Data export                                               |
 | `@react-native-community/datetimepicker`               | Task date/time                                            |
@@ -151,12 +151,12 @@ sample data is selected during registration.
 
 **ActiveTimerState** stores `sectionEndsAt` (epoch ms). Remaining time is always `sectionEndsAt - Date.now()`. Pause stores `remainingMsWhenPaused`.
 
-## 8. Known limitations (V0)
+## 8. Platform behavior and limitations
 
-- Drag-and-drop for timer sections uses up/down reorder rather than a full drag list (still unlimited sections).
-- Task reminders can be toggled in Settings; V0 does not yet schedule a daily reminder clock. Timer section notifications do.
+- Native lists support drag ordering; web lists use accessible move buttons. Sessions support up to 200 sections.
+- Native task reminders schedule the next timed occurrence within 31 days when schedules refresh. Browser notifications are not supported.
 - Local notifications require OS permission and Expo Go / a dev build with the notifications plugin.
-- Export writes JSON (share sheet or clipboard). There is no import yet.
+- Export downloads JSON on web and uses the native share flow on mobile. There is no import yet.
 - Recurrence does not yet support “last Friday of the month” style rules.
 - Account loading and saving require a reachable backend. There is no persistent offline queue;
   keep the app open until pending changes are saved. MongoDB backup operations remain a deployment concern.
@@ -167,7 +167,7 @@ sample data is selected during registration.
 1. Development builds (`npx expo prebuild`) so notification channels and keep-awake are fully native.
 2. Import for the JSON export, plus an optional encrypted backup.
 3. Calendar widgets / lock-screen live activity for the running timer.
-4. Richer recurrence (end dates, skip dates).
+4. Richer recurrence patterns such as the last Friday of each month.
 5. Incremental synchronization and separate history collections for larger accounts.
 6. Health, nutrition, and AI modules as separate `src/features/` packages — do not fold them into the task store.
 
@@ -216,7 +216,7 @@ Before publishing, confirm these URLs return `200` from the deployed domain:
 2. In browser developer tools, inspect **Application > Service Workers** and confirm `service-worker.js` is activated. Confirm the manifest and cached resources are present under **Cache Storage**.
 3. Reload once while online so the current document is cached.
 4. Turn off the network and reopen the URL. The cached shell should show a connection error; account screens require a connection. Restore the network and choose Retry.
-5. Restore the network and reload after a release. Increment the service worker cache version when changing cache behavior.
+5. Restore the network and close old app tabs after a release so the waiting worker can activate. Exports automatically stamp a new cache when the entry bundle changes.
 
 ### iPhone Safari test and installation
 
@@ -228,3 +228,11 @@ Use the deployed HTTPS URL on the iPhone, not the Expo development server:
 4. Enable Airplane Mode and relaunch. Verify the connection-error state, then restore connectivity and Retry.
 
 Safari does not expose Chrome’s service-worker panels on iPhone. Validate activation and cache contents in desktop Safari’s **Develop > [iPhone] > Web Inspector** while the phone is connected, then repeat the real Home Screen and Airplane Mode test on the device.
+
+## Phase 1 update
+
+See [review and release notes](../docs/phase-1-review.md) for current behavior.
+`web:export` now clears Metro's cache (preventing a stale embedded API URL) and
+stamps the service worker cache per release. `web:serve` includes SPA fallback on
+port 8081. Reordering uses keyboard-accessible move buttons on web and drag on native.
+The app includes installation guidance, but account access remains online-first.
